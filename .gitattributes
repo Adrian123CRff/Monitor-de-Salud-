@@ -1,0 +1,8 @@
+# mvnw es un script de shell: si Windows lo convierte a CRLF, deja de
+# ejecutarse en Git Bash/Mac/Linux ("bad interpreter").
+mvnw text eol=lf
+mvnw.cmd text eol=crlf
+
+*.java text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
