@@ -1,0 +1,36 @@
+Dijo el profe que el elijio oracle pero todas las demás podrías usarse, además agrego que si pudiéramos hacer conexiones entre bases de datos distintas estaría genial.
+TOADS -> Herramienta 
+Procesos -> son los responsables de ejecutar cosas, los proceso basicamente en servidores de esta naturaleza, existen dos, procesos para usuarios(leer tratamiento de como leerse un usuario, entender que es aplicar una sentencia sql. Suponiendo que tenemos varios proceso de usuario que son relevantes. & procesos de fondo(estos son los procesos que se recomienda monitorear, los DBWR(EN CASO DE QUE ESTE PROCESO NO ESTA FUNCIONANDO Habra un problema, existe Tambien logwr, PMON, SMON.) 
+Memoria* es el proceso mas importante ya que  
+Archivos-> si o si vamos a tener bitacoras.
+
+
+
+Sugerencia de la investigacion(generar buena generacion de documentacion para nuestros clientes, para evitar que esten demasiadas horas revisando cosas.
+
+
+En el grafico del profe(una red neuronal de analizar los problemas o maching learning permita analizar los problemas e identificarlos)
+Dentro de los procesos saber realmente cuanto es el valor de peso, para asi saber cuanto es la contribucion, y asi saber cuanto porcentaje de proceso tiene cada uno. Al finalizar un indice de procesos lo que nos permite generar mapa de calor. 
+Tendencia si podria ser incluida en el ponitor final, para que nuestra base de datos pueda saber que esta sucediendo realmente.en el cual se registra todo esta siendo registrado.(saber cuales son las tendencias y cuales son las responsabilidades.
+Normalizar datos* super importante ya que si no nuestro sistema genera basura.
+si usamos Saas de Microsoft, podemos hacer indicadores.
+
+dashboard = indice de salud, estaba alrevez.
+
+
+determinar los procesos de usuario y los procesos de backgrand
+
+
+
+
+Variables propuestas 6.2
+si me sale el proceso dos, que es lo que quiero medir(que es lo que quiero medir realmente. no solamente indentificarlo si no medirlo. Cual es la fuente, como, metricas.
+Dentro del umbral tenemos U1 Y U2 limite inferior y limite superior.
+(los umbrales de diferentes empresas son totalmente distintas). cuando llamaria los valores base a las bases de datos> cuando en algun momento este estable las bases de datos.
+algoritmos para sacar los umbrales.
+
+ir realizando plataforma simulada, 
+ISO CONCEPTOS DE LA ISO, CIERTO, NO CIERTO, EVALUACION DE RIESGO, PARA QUE SIRVE. CASOS PRACTICOS. 
+
+
+EN EL INDICE MUESTRA INFORMACION, EL SISTEMA NUESTRO TODOS SON POSITIVOS.

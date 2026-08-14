@@ -1,0 +1,89 @@
+procesos - memoria y los archivos. necesitamos monitorearlo, nos permitirá realizar un calculo final, que nos ayudara a calcular un porcentual, que se asignara a defirentes colores, pero esta ligado a varios factores, que es  memoria, procesos, archivos, 
+Dentro de los procesos habran cosas que sumaran valor, Memoria y Archivos }
+La suma de todos estos factores dará alguno de los anteriores colores, dependiendo de la situación.
+Con lo que representa cada uno de estos colores pag1
+
+
+P[datos de los procesos, p1 se esta reforoemdp a ciamtps ´rpcesps estam actovps actualmente, en el cual cada uno de estos consumen informaicon, estos están ligados a diferentes factpres, como usuarios, memoria, como se procesa etc. etc. Son datos que necesitamos extraer, que son relevantes. Para poder obtener esos datos, hay que preguntarle al Oracle cuantos procesos están pasando en ese momento.
+En memoria: Nos interesa lo que son los datos de memoria. m1. todas las transacciones son procesos que consume memoria,ya sea un insert,  un delete, o otro proceso(vistas, tablas etc) toda transacción que ocurre en la bases de datos, consume memoria. En estos diferentes procesos m, trabajan con procesos avanzados consultas de sql. 
+Arquivos. es donde vive la información pura, existen diferentes tipos de archivos, 3 parámetros datos y bitácoras(necesita que ejemplo a1 le diga cuanto espacio hay disponible en una tabla) 
+
+se necesita los tres aspectos para evaluar la base de datos, aun que use los tres y sale en rojo, es muy probable que pueda ser momentaneo, pero si observamos un patron en el cual la bas de datos tiene un error
+pero de momento necesitamos que la base de datos no sea solo de un cliente si no de varios clientes que el monitor sea capaz de monitoriar otras bases de datos.
+
+
+
+Cada uno de los procesos no tienen el mismo peso(índices valor de la situación en ese momento).
+
+a cada uno de estos procesos se pueden tener diferentes pesos. 
+
+ip la situación actual de los procesos, muestra una imagen de lo que esta pasando los procesos, necesitamos conocer el aporte del sistema de salud.
+Podemos comenzar con una distribicion equitativa para la generación de un índice cuando ya se tengan el conocimiento, en ese momento se puede ser mas especifico.
+
+
+El monitor de salud toma todos esos factores, y el para poder determinal tiene que obtener los 3 índices, y se genera un valor de salud $SB(IP+IM+IA)/3
+con el que se tenga un rango que muestre un rango basado en el resultado.
+0-30, 30-50. 50,70, 70,100
+
+
+
+estos índices se pueden utilizar para muchas cosas con respecto a las normas iso 27002
+
+Se puede conocer como un dashboard o un tablero de control. ejemplo (velocidad de un vehiculo<)
+Cada cliente va a tener su propio dashboard 
+SaaS Microsoft (podemos utilizarlo) 
+
+No inventar las cosas, crear el tablero de control entre mas grafico mejor, mientras mas información mejor.
+
+El criterio lo define un experto DBA.
+podemos tenerlo en un monitor donde esten todos los usuarios y si sale ejemplo en rojo podemos ingresar y revisar por que es que ese usuario se encuentra asi.
+
+
+•	Disponible, pero con un tablespace prácticamente lleno. botaria todos los sistemas,(en el administrador podríamos observar  en que lugar esta fallando ya que muchas veces puede que este en rojo pero la mayoría de procesos están otros colores indicando 
+indicadores fáciles de interpretar(básicamente que sea fácil de saber por que esta fallando, no mostrar 3000 cosas que realmente no importa.) 
+cada índice de salud tiene un dashboard.
+puede aparecer en cada una de estas los procesos que esta pasando y los posibles errores que puede estar pasando.
+
+
+4.	Detectar condiciones anormales. necesitamos saber que es anormal en cada uno de los valores.
+Ejemplo tenemos un Valor A3 -> 0.65 (metrica,valores, limites) {0.50 ….. 0.89 } 
+5.	Establecer niveles de alerta. cada cuando un color 
+6.	Calcular un indicador global de salud. isbd 
+7.	Presentar la información mediante un tablero de control. dash de carro 
+8.	Registrar la evolución histórica de los indicadores.* una mejora final donde pueda guardar archivos. en el cual podemos enviarla a jarvis para realizar evaluaciones.
+
+
+Punto #4Concepto de salud de una base de datos
+La capacidad de la instancia Oracle para mantener sus procesos, memoria y estructuras de almacenamiento dentro de condiciones operativas aceptables.
+•	¿La cantidad de procesos es normal?
+ejemplo si p1 es la cantidad de procesos no esten dentro de un rango. 
+Cual considera que es un valor normal(Claude). de cauerdo de los parámetros de limite inferior y limite superior
+No es lo mismo tener una base de datos, small, médium,large. 
+Deberíamos considerar un valor,(una opción donde muestra todos estos parámetros<)
+PGA SEGUNDA MEMORIA 
+CUANTOS DIAS TENGO ANTES DE QUE SE ACABE EL ESPACIO:
+
+
+Lo importante es saber que nosotros tenemos la responsabilidad de bases de datos.
+
+php,Java 
+$ vistas
+V$SESSION_WAIT,  cuales procesos están detenidos.
+V$WAIT_CHAINS, 
+y V$SQLAREA.  es super importante, ya que nos ayuda con la cantidad de procesos. tenemos un máximo de procesos ejemplo 50 y 52 se toman esos dos. Tener encuenta la optimización 
+Pueden pasar de N(N3) a un o(4), se evalúan sobre tiempo y espacio 
+Crear las tablas 
+(podemos hacer que cuando una base de datos se este poniendo mal se auto ajuste de menor a mayor prioridad, es buena la idea? o no lo seria por que depende pueda que sea una falta alarma?
+implementar el software de las tablas. 
+
+Ser un arquitecto, básicamente pensar como hacer el documento.
+
+
+Estos valores son umbrales iniciales de diseño, no valores universales de Oracle. En una implementación real deberán calibrarse según la carga y características de cada instalación. un ejemplo es que no es lo mismo que una empresa de textil a un como Microsoft(distinto tipo de, small y otra large) 
+índice de peso de memoria le meteria un 60% 
+
+Hay que tener encuenta que si presento el mismo problema regularmente esto puede ser un indicativo que tenemos un error(poder observar los patrones) 
+
+ip es la suma de todas las variables multiplicada por su peso.
+punto 18 realizar lo paramétricamente,porque no todos los usuarios son igual.
+pedir me de una priorización de las variables, ahí podríamos analizar el peso de estas.
