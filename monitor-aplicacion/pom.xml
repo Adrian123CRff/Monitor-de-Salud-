@@ -1,4 +1,5 @@
 <project>
+  <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>cr.ac.una</groupId>
     <artifactId>monitor-salud-oracle</artifactId>

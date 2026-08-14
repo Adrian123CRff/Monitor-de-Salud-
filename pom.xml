@@ -39,6 +39,14 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <!-- Alinea los módulos de Testcontainers usados en monitor-infraestructura. -->
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>1.21.3</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 </project>
