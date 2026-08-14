@@ -105,6 +105,12 @@ public class JdbcRecolectorProcesos implements RecolectorProcesos {
         valores.put("p7_operaciones_largas", rs.getDouble("p7"));
         valores.put("p8_peor_util_recurso", rs.getDouble("p8"));
         valores.put("bloqueo_max_seg", rs.getDouble("bloqueo_max_seg"));
+        if (limiteProcesos != null) {
+            valores.put("limite_procesos", limiteProcesos);
+        }
+        if (limiteSesiones != null) {
+            valores.put("limite_sesiones", limiteSesiones);
+        }
 
         // UNLIMITED (limite null) => sin restricción, utilización 0, no error de división.
         valores.put("util_procesos_pct",

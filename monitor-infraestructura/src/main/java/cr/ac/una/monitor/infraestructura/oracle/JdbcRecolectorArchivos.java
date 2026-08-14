@@ -104,12 +104,20 @@ public class JdbcRecolectorArchivos implements RecolectorArchivos {
         valores.put("a1_datafiles_online", rs.getDouble("a1"));
         valores.put("a2_datafiles_offline", rs.getDouble("a2"));
         valores.put("a3_datafiles_bytes", rs.getDouble("a3"));
-        valores.put("peor_tablespace_pct", rs.getDouble("a4"));
+        double peorTablespacePct = rs.getDouble("a4");
+        double minMiembrosGrupo = rs.getDouble("a6_min_miembros");
+        // Se guarda dos veces a propósito: el nombre "a4_.../a6_..." es la columna
+        // del esquema (crudo); "peor_tablespace_pct"/"redundancia_redo" es el nombre
+        // que espera CalculadorComponente (ver catalogo-variables.md "derivadas").
+        // Aquí no hay cómputo real -- son el mismo valor, dos claves.
+        valores.put("a4_peor_tablespace_pct", peorTablespacePct);
+        valores.put("peor_tablespace_pct", peorTablespacePct);
         valores.put("a4_tablespaces_riesgo", rs.getDouble("a4_riesgo"));
         valores.put("a5_tempfiles_online", rs.getDouble("a5"));
         valores.put("a5_tempfiles_bytes", rs.getDouble("a5_bytes"));
         valores.put("a6_grupos_redo", rs.getDouble("a6"));
-        valores.put("redundancia_redo", rs.getDouble("a6_min_miembros"));
+        valores.put("a6_min_miembros_grupo", minMiembrosGrupo);
+        valores.put("redundancia_redo", minMiembrosGrupo);
         valores.put("a7_archivos_invalidos", rs.getDouble("a7"));
         valores.put("a8_archivos_recover", rs.getDouble("a8"));
 

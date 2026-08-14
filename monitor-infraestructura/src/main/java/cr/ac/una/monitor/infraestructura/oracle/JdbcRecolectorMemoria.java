@@ -97,7 +97,7 @@ public class JdbcRecolectorMemoria implements RecolectorMemoria {
         valores.put("m6_pga_en_uso_bytes", rs.getDouble("m6"));
         valores.put("m7_pga_maxima_bytes", rs.getDouble("m7"));
         valores.put("m8_over_alloc_acum", rs.getDouble("m8"));
-        valores.put("m9_cache_hit_pct_acumulado", cacheHitAcumulado);
+        valores.put("m9_cache_hit_pct", cacheHitAcumulado); // nombre de columna en el esquema; ver nota arriba: es acumulado
         if (pgaTarget != null) {
             valores.put("pga_target_bytes", pgaTarget);
         }
