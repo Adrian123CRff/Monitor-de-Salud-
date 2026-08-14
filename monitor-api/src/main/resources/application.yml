@@ -1,8 +1,22 @@
 spring:
   application:
     name: monitor-salud-oracle
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Apunta al datasource @Primary (historico, ver DataSourceConfig).
+    # La instancia Oracle monitoreada NUNCA se migra.
 
 monitor:
+  datasource:
+    monitoreada:
+      url: jdbc:oracle:thin:@//localhost:1521/FREE
+      username: c##monitor
+      password: ${MONITOR_DB_PASSWORD:MonitorPass123}
+    historico:
+      url: jdbc:postgresql://localhost:5432/monitor_historico
+      username: ${HISTORICO_DB_USER:monitor}
+      password: ${HISTORICO_DB_PASSWORD:HistoricoPass123}
   muestreo:
     procesos:  PT30S      # ISO-8601 Duration
     memoria:   PT60S
