@@ -1,0 +1,118 @@
+package cr.ac.una.monitor.infraestructura.oracle;
+
+import cr.ac.una.monitor.aplicacion.puerto.salida.RecoleccionFallidaException;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorArchivos;
+import cr.ac.una.monitor.dominio.modelo.Componente;
+import cr.ac.una.monitor.dominio.modelo.InstanciaId;
+import cr.ac.una.monitor.dominio.modelo.Muestra;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Component;
+
+import javax.sql.DataSource;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Lee a1..a8 de V$DATAFILE / DBA_TABLESPACE_USAGE_METRICS / V$TEMPFILE /
+ * V$LOG / V$LOGFILE (SQL de la skill
+ * oracle-vistas-dinamicas/references/sql-archivos.md).
+ *
+ * "redundancia_redo" (variable de UmbralesIniciales) = min miembros por
+ * grupo de redo (a6_min_miembros): 1 miembro = sin copia.
+ *
+ * PENDIENTE: no guarda el detalle por tablespace en MONITOR_TABLESPACE
+ * (a4_nombre solo se usa para el log de error, no se persiste todavía) --
+ * eso vive en el repositorio, no en el recolector, y el repositorio real
+ * aún no existe.
+ */
+@Component
+public class JdbcRecolectorArchivos implements RecolectorArchivos {
+
+    /** Umbral de "tablespace en riesgo" para el conteo a4_riesgo. Valor inicial, no calibrado. */
+    private static final double UMBRAL_RIESGO_TABLESPACE_PCT = 90.0;
+
+    private static final String SQL = """
+        SELECT
+            df.datafiles_online     AS a1,
+            df.datafiles_offline    AS a2,
+            df.datafiles_bytes      AS a3,
+            ts.peor_tablespace_pct  AS a4,
+            ts.tablespaces_riesgo   AS a4_riesgo,
+            ts.peor_tablespace      AS a4_nombre,
+            tf.tempfiles_online     AS a5,
+            tf.tempfiles_bytes      AS a5_bytes,
+            rl.grupos_redo          AS a6,
+            rl.min_miembros_grupo   AS a6_min_miembros,
+            lf.archivos_invalidos   AS a7,
+            df.datafiles_recover    AS a8
+        FROM
+            ( SELECT
+                COUNT(CASE WHEN status IN ('ONLINE','SYSTEM') THEN 1 END) AS datafiles_online,
+                COUNT(CASE WHEN status IN ('OFFLINE','SYSOFF') THEN 1 END) AS datafiles_offline,
+                COUNT(CASE WHEN status = 'RECOVER'            THEN 1 END) AS datafiles_recover,
+                SUM(bytes)                                                AS datafiles_bytes
+              FROM v$datafile
+            ) df,
+            ( SELECT
+                ROUND(MAX(used_percent), 2)                            AS peor_tablespace_pct,
+                COUNT(CASE WHEN used_percent > :umbral_riesgo THEN 1 END) AS tablespaces_riesgo,
+                MAX(tablespace_name) KEEP (DENSE_RANK FIRST
+                    ORDER BY used_percent DESC)                        AS peor_tablespace
+              FROM dba_tablespace_usage_metrics
+            ) ts,
+            ( SELECT
+                COUNT(CASE WHEN status = 'ONLINE' THEN 1 END) AS tempfiles_online,
+                SUM(bytes)                                    AS tempfiles_bytes
+              FROM v$tempfile
+            ) tf,
+            ( SELECT
+                COUNT(DISTINCT group#) AS grupos_redo,
+                MIN(members)           AS min_miembros_grupo
+              FROM v$log
+            ) rl,
+            ( SELECT COUNT(CASE WHEN status = 'INVALID' THEN 1 END) AS archivos_invalidos
+              FROM v$logfile
+            ) lf
+        """;
+
+    private final JdbcClient jdbc;
+
+    public JdbcRecolectorArchivos(@Qualifier("oracleMonitoreado") DataSource ds) {
+        this.jdbc = JdbcClient.create(ds);
+    }
+
+    @Override
+    public Muestra recolectar(InstanciaId instancia) {
+        try {
+            return jdbc.sql(SQL)
+                .param("umbral_riesgo", UMBRAL_RIESGO_TABLESPACE_PCT)
+                .query(this::mapear)
+                .single();
+        } catch (DataAccessException e) {
+            throw new RecoleccionFallidaException(Componente.ARCHIVOS, instancia, e);
+        }
+    }
+
+    private Muestra mapear(ResultSet rs, int rowNum) throws SQLException {
+        Map<String, Double> valores = new HashMap<>();
+
+        valores.put("a1_datafiles_online", rs.getDouble("a1"));
+        valores.put("a2_datafiles_offline", rs.getDouble("a2"));
+        valores.put("a3_datafiles_bytes", rs.getDouble("a3"));
+        valores.put("peor_tablespace_pct", rs.getDouble("a4"));
+        valores.put("a4_tablespaces_riesgo", rs.getDouble("a4_riesgo"));
+        valores.put("a5_tempfiles_online", rs.getDouble("a5"));
+        valores.put("a5_tempfiles_bytes", rs.getDouble("a5_bytes"));
+        valores.put("a6_grupos_redo", rs.getDouble("a6"));
+        valores.put("redundancia_redo", rs.getDouble("a6_min_miembros"));
+        valores.put("a7_archivos_invalidos", rs.getDouble("a7"));
+        valores.put("a8_archivos_recover", rs.getDouble("a8"));
+
+        return new Muestra(Componente.ARCHIVOS, Instant.now(), valores, false);
+    }
+}
