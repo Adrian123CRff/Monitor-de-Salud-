@@ -1,9 +1,11 @@
 package cr.ac.una.monitor.aplicacion.puerto.salida;
 
-/** Pesos y umbrales vigentes (arrancan desde application.yml, recalibrables en caliente). Tipo Calibracion: pendiente en dominio.calibracion. */
+import cr.ac.una.monitor.dominio.calibracion.Calibracion;
+
+/** Pesos y umbrales vigentes (arrancan desde application.yml, recalibrables en caliente). */
 public interface RepositorioCalibracion {
 
-    Object vigente();
+    Calibracion vigente();
 
-    void registrar(Object nueva);
+    void registrar(Calibracion nueva);
 }
