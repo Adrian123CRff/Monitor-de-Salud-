@@ -1,0 +1,52 @@
+services:
+  # Instancia Oracle monitoreada. ADR 0001: Oracle 23ai Free en Docker.
+  # NOTA: se levanta UNA sola instancia por ahora, no las 2 que menciona el
+  # ADR 0001/decisión "2 instancias simuladas" — con Oracle Free cada
+  # contenedor pesa varios GB de RAM y no quise asumir que la máquina que
+  # corra esto (la tuya u otra del equipo) aguanta 2 a la vez sin probarlo
+  # primero. Duplicar este servicio con otro nombre/puerto cuando se
+  # confirme que hay recursos es trivial — la estructura ya está pensada
+  # para eso (ver comentario abajo).
+  oracle-monitoreado:
+    image: gvenzl/oracle-free:23-slim
+    container_name: monitor-oracle
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-OraclePass123}
+      MONITOR_PASSWORD: ${MONITOR_PASSWORD:-MonitorPass123}
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      - ./docker/oracle-init:/container-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # Histórico del monitor. ADR 0002: separado de la instancia observada.
+  historico:
+    image: postgres:17-alpine
+    container_name: monitor-historico
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: monitor_historico
+      POSTGRES_USER: ${POSTGRES_USER:-monitor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-HistoricoPass123}
+    volumes:
+      - historico-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-monitor} -d monitor_historico"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Para agregar una segunda instancia "cliente" simulada (ver ADR 0001),
+  # copiar el bloque de oracle-monitoreado con otro container_name, otro
+  # puerto de host (ej. 1522:1521) y otro volumen.
+
+volumes:
+  oracle-data:
+  historico-data:

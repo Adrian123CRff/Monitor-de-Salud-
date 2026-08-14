@@ -6,3 +6,4 @@ mvnw.cmd text eol=crlf
 *.java text eol=lf
 *.ts text eol=lf
 *.tsx text eol=lf
+*.sh text eol=lf
