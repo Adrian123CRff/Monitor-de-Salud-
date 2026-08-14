@@ -1,0 +1,22 @@
+# Maven
+target/
+*.class
+
+# Node / Vite
+monitor-web/node_modules/
+monitor-web/dist/
+monitor-web/.vite/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Secretos / entorno local — nunca credenciales de las instancias Oracle en el repo
+.env
+.env.local
+*.env

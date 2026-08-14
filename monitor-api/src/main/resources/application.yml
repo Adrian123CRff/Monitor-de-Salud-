@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: monitor-salud-oracle
+
+monitor:
+  muestreo:
+    procesos:  PT30S      # ISO-8601 Duration
+    memoria:   PT60S
+    archivos:  PT10M
+  pesos:
+    # ADR 0003 / documento de diseño, sección 17: propuesta inicial, no calibrada.
+    procesos: 0.30
+    memoria:  0.35
+    archivos: 0.35
+  agregacion:
+    # ADR 0003: media aritmética ponderada, no geométrica.
+    metodo: ARITMETICA
+    veto:
+      habilitado: true
+      umbral-componente: 40   # franja CRITICO de la escala (Estado.java). Pendiente P3: calibrar con datos reales.
+  planificador:
+    habilitado: true

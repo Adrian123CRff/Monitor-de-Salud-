@@ -1,0 +1,44 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.0</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>cr.ac.una</groupId>
+  <artifactId>monitor-salud-oracle</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <archunit.version>1.4.1</archunit.version>
+  </properties>
+
+  <modules>
+    <module>monitor-dominio</module>
+    <module>monitor-aplicacion</module>
+    <module>monitor-infraestructura</module>
+    <module>monitor-api</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- El BOM de Oracle alinea ojdbc con sus artefactos relacionados
+           (ucp, oraclepki, osdt_core...). Fijar versiones a mano es la
+           receta clásica del NoClassDefFoundError en tiempo de ejecución. -->
+      <dependency>
+        <groupId>com.oracle.database.jdbc</groupId>
+        <artifactId>ojdbc-bom</artifactId>
+        <version>23.26.3.0.0</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+</project>
