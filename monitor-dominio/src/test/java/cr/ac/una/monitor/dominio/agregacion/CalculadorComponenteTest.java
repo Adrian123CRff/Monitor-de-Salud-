@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static cr.ac.una.monitor.dominio.calibracion.TipoUmbral.LINEAL_INVERTIDA;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,7 +52,10 @@ class CalculadorComponenteTest {
     }
 
     @Test
-    void un_datafile_offline_hunde_archivos_por_criticoSiHayAlguno() {
+    void un_datafile_offline_veta_todo_archivos_no_solo_diluye_el_promedio() {
+        // No existe un "un poco" de datafile offline (ver skill diseno-de-indicadores,
+        // "Parte 2 -- Reglas de veto"): antes esto solo restaba peso dentro del
+        // promedio (80 pts); ahora fuerza TODO el componente a 0.
         Muestra muestra = new Muestra(Componente.ARCHIVOS, ahora, Map.of(
             "peor_tablespace_pct", 30.0,
             "a2_datafiles_offline", 1.0,
@@ -63,8 +67,46 @@ class CalculadorComponenteTest {
         Indicador ia = calculador.calcular(muestra, Componente.ARCHIVOS, UmbralesIniciales.archivos());
 
         assertThat(ia.puntuacionesPorVariable().get("a2_datafiles_offline")).isEqualTo(0.0);
-        // 40% peor_tablespace(100) + 20% a2(0) + 20% a7(100) + 10% a8(100) + 10% redundancia(100) = 80
-        assertThat(ia.puntuacion()).isCloseTo(80.0, offset(0.01));
+        // el desglose sigue mostrando el promedio real (80) para que el dashboard
+        // explique el porqué del 0, pero la puntuación devuelta es 0 por el veto.
+        assertThat(ia.puntuacionesPorVariable().get("peor_tablespace_pct")).isCloseTo(100.0, offset(0.01));
+        assertThat(ia.puntuacion()).isCloseTo(0.0, offset(0.01));
+    }
+
+    @Test
+    void un_tablespace_al_98_por_ciento_veta_todo_archivos_aunque_el_resto_este_sano() {
+        // Entre 75-95% peor_tablespace_pct sigue dando puntuación parcial (detección
+        // temprana); a partir de 98% es un límite duro adicional (vetoSiValorSupera)
+        // que veta TODO el componente sin importar el resto.
+        Muestra muestra = new Muestra(Componente.ARCHIVOS, ahora, Map.of(
+            "peor_tablespace_pct", 98.5,
+            "a2_datafiles_offline", 0.0,
+            "a7_archivos_invalidos", 0.0,
+            "a8_archivos_recover", 0.0,
+            "redundancia_redo", 2.0
+        ), false);
+
+        Indicador ia = calculador.calcular(muestra, Componente.ARCHIVOS, UmbralesIniciales.archivos());
+
+        assertThat(ia.puntuacion()).isCloseTo(0.0, offset(0.01));
+    }
+
+    @Test
+    void un_tablespace_al_96_por_ciento_no_veta_solo_diluye_el_promedio() {
+        // 96% ya está por encima del critico (95) de la banda graduada -- esa variable
+        // sola puntúa 0 -- pero todavía no cruza el límite duro de veto (98).
+        Muestra muestra = new Muestra(Componente.ARCHIVOS, ahora, Map.of(
+            "peor_tablespace_pct", 96.0,
+            "a2_datafiles_offline", 0.0,
+            "a7_archivos_invalidos", 0.0,
+            "a8_archivos_recover", 0.0,
+            "redundancia_redo", 2.0
+        ), false);
+
+        Indicador ia = calculador.calcular(muestra, Componente.ARCHIVOS, UmbralesIniciales.archivos());
+
+        // 40% peor_tablespace(0) + 20% a2(100) + 20% a7(100) + 10% a8(100) + 10% redundancia(100) = 60
+        assertThat(ia.puntuacion()).isCloseTo(60.0, offset(0.01));
     }
 
     @Test
@@ -94,7 +136,8 @@ class CalculadorComponenteTest {
     void ignora_umbrales_de_tipo_contexto() {
         List<Umbral> conContexto = List.of(
             Umbral.lineal("variable_puntua", LINEAL_INVERTIDA, 70, 95, 1.0),
-            new Umbral("variable_contexto", cr.ac.una.monitor.dominio.calibracion.TipoUmbral.CONTEXTO, 0, 0, 0, 0));
+            new Umbral("variable_contexto", cr.ac.una.monitor.dominio.calibracion.TipoUmbral.CONTEXTO,
+                0, 0, 0, 0, false, Optional.empty()));
         Muestra muestra = new Muestra(Componente.MEMORIA, ahora,
             Map.of("variable_puntua", 30.0, "variable_contexto", 999.0), false);
 

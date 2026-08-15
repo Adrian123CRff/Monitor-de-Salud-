@@ -16,15 +16,22 @@ import java.util.Map;
  * (IP, IM o IA): normaliza cada variable según su Umbral y promedia
  * ponderando por peso_en_componente.
  *
+ * Vetos absolutos (ver Umbral.vetoAbsoluto/vetoSiValorSupera y skill
+ * diseno-de-indicadores / references/agregacion.md, "Parte 2 -- Reglas de
+ * veto"): si alguna variable dispara su condición de veto, la puntuación
+ * de TODO el componente se fuerza a 0, sin importar el promedio -- un
+ * datafile OFFLINE, un proceso mandatorio caído o un tablespace al 98%
+ * no admiten "un poco". El promedio ponderado normal se sigue calculando
+ * y queda en puntuacionesPorVariable para que el dashboard explique el
+ * porqué del 0, pero no es lo que se devuelve como puntuación cuando hay
+ * veto. MotorIndicadores no necesita saber nada de esto: su veto de
+ * componente existente (puntuación < umbralVetoComponente) atrapa el 0
+ * igual que atraparía cualquier otro valor bajo.
+ *
  * IP_usuarios / IP_fondo (ADR 0006) no se separan aquí: este calculador
  * siempre produce un único Indicador por Componente. MuestrearInstanciaServicio
  * lo llama dos veces para PROCESOS (una por UmbralesIniciales.procesosUsuarios(),
  * otra por procesosFondo()) y combina el resultado con CombinadorSubIndicadores.
- *
- * PENDIENTE: los vetos absolutos de agregacion.md (a2/a7/a8 forzando
- * CRITICO sin importar el promedio, tablespace >= 98 %...) no están
- * implementados: hoy solo bajan la puntuación de ARCHIVOS como cualquier
- * otra variable.
  */
 public final class CalculadorComponente {
 
@@ -32,6 +39,7 @@ public final class CalculadorComponente {
         Map<String, Double> puntuaciones = new LinkedHashMap<>();
         double sumaPonderada = 0;
         double sumaPesos = 0;
+        boolean vetoAbsoluto = false;
 
         for (Umbral u : umbrales) {
             if (u.tipo() == TipoUmbral.CONTEXTO) {
@@ -45,6 +53,13 @@ public final class CalculadorComponente {
             puntuaciones.put(u.variable(), score);
             sumaPonderada += score * u.pesoEnComponente();
             sumaPesos += u.pesoEnComponente();
+
+            if (u.vetoAbsoluto() && score <= 0.0) {
+                vetoAbsoluto = true;
+            }
+            if (u.vetoSiValorSupera().isPresent() && crudo >= u.vetoSiValorSupera().get()) {
+                vetoAbsoluto = true;
+            }
         }
 
         if (sumaPesos <= 0) {
@@ -53,7 +68,8 @@ public final class CalculadorComponente {
                 + "Variables en la muestra: " + muestra.valores().keySet());
         }
 
-        return new Indicador(componente, sumaPonderada / sumaPesos, puntuaciones);
+        double puntuacion = vetoAbsoluto ? 0.0 : sumaPonderada / sumaPesos;
+        return new Indicador(componente, puntuacion, puntuaciones);
     }
 
     private double puntuar(double valor, Umbral u) {

@@ -90,9 +90,17 @@ public final class UmbralesIniciales {
             Umbral.penalizacion("m10_multipass_delta", 10, 0.3));
     }
 
+    /**
+     * Vetos absolutos (ver skill diseno-de-indicadores / references/agregacion.md,
+     * "Parte 2 -- Reglas de veto"): a2/a7/a8 ya vetaban TODO ARCHIVOS a través de
+     * criticoSiHayAlguno (no diluyen, ver CalculadorComponente); peor_tablespace_pct
+     * suma un límite duro adicional en 98% -- entre 75-95% sigue dando puntuación
+     * parcial (detección temprana), pero a partir de 98% ("detención inminente,
+     * cuestión de minutos u horas") ya no importa el promedio.
+     */
     public static List<Umbral> archivos() {
         return List.of(
-            Umbral.lineal("peor_tablespace_pct", LINEAL_INVERTIDA, 75, 95, 0.4),
+            Umbral.lineal("peor_tablespace_pct", LINEAL_INVERTIDA, 75, 95, 0.4).conVetoSiSupera(98),
             Umbral.criticoSiHayAlguno("a2_datafiles_offline", 0.2),
             Umbral.criticoSiHayAlguno("a7_archivos_invalidos", 0.2),
             Umbral.criticoSiHayAlguno("a8_archivos_recover", 0.1),

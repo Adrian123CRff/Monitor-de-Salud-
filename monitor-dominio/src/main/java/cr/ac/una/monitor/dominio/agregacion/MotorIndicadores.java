@@ -26,9 +26,20 @@ import java.util.Optional;
  * que "está mal". El ISBD queda marcado parcial=true y la ausencia se
  * anota en causas para que no pase inadvertida.
  *
- * Los vetos absolutos de agregacion.md (tablespace >= 98 %, datafile en
- * RECOVER, fallo de recolección sostenido...) quedan pendientes: dependen
- * de los adaptadores Oracle reales, que aún no existen (ver monitor-infraestructura).
+ * Los vetos absolutos de agregacion.md (datafile en RECOVER, datafile
+ * OFFLINE, miembro de redo INVALID, tablespace >= 98 %) ya no viven aquí:
+ * se resuelven un nivel más abajo, en CalculadorComponente, forzando la
+ * puntuación del componente entero a 0 -- este veto de componente
+ * (puntuación < umbralVetoComponente) los atrapa igual que atraparía
+ * cualquier otro valor bajo, sin necesitar lógica propia.
+ *
+ * "Fallo de recolección sostenido" (el otro veto absoluto de agregacion.md)
+ * es distinto de lo que hace MuestrearInstanciaServicio.recolectarSeguro:
+ * un solo fallo puntual NO veta aquí, se excluye del promedio (ver
+ * Isbd.parcial) -- es una decisión de diseño explícita, no un olvido:
+ * un corte transitorio de red no debería gritar CRITICO. Un fallo
+ * *sostenido* (N ciclos seguidos) sí debería, pero esa lógica de conteo
+ * todavía no existe.
  */
 public final class MotorIndicadores {
 
