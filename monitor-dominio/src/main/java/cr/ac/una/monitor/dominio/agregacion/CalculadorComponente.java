@@ -16,11 +16,15 @@ import java.util.Map;
  * (IP, IM o IA): normaliza cada variable según su Umbral y promedia
  * ponderando por peso_en_componente.
  *
- * PENDIENTE: no separa IP_usuarios / IP_fondo dentro de PROCESOS (P4) --
- * calcula un único indicador plano. Los vetos absolutos de agregacion.md
- * (a2/a7/a8 forzando CRITICO sin importar el promedio, tablespace >= 98 %...)
- * tampoco están implementados: hoy solo bajan la puntuación de ARCHIVOS como
- * cualquier otra variable.
+ * IP_usuarios / IP_fondo (ADR 0006) no se separan aquí: este calculador
+ * siempre produce un único Indicador por Componente. MuestrearInstanciaServicio
+ * lo llama dos veces para PROCESOS (una por UmbralesIniciales.procesosUsuarios(),
+ * otra por procesosFondo()) y combina el resultado con CombinadorSubIndicadores.
+ *
+ * PENDIENTE: los vetos absolutos de agregacion.md (a2/a7/a8 forzando
+ * CRITICO sin importar el promedio, tablespace >= 98 %...) no están
+ * implementados: hoy solo bajan la puntuación de ARCHIVOS como cualquier
+ * otra variable.
  */
 public final class CalculadorComponente {
 

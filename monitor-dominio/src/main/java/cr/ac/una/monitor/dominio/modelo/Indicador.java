@@ -5,9 +5,9 @@ import java.util.Map;
 /**
  * Puntuación de salud 0-100 de un componente (IP, IM o IA). 100 = sano.
  *
- * PENDIENTE (P4 del registro de decisiones): cómo se representan los
- * sub-índices IP_usuarios / IP_fondo dentro de IP. Se define en la sesión
- * de diseño con la skill diseno-de-indicadores; no se anticipa aquí.
+ * IP_usuarios / IP_fondo (ver ADR 0006) no viven aquí: son dos Indicador
+ * de Componente.PROCESOS por separado, combinados en uno solo por
+ * CombinadorSubIndicadores antes de llegar a MotorIndicadores.
  */
 public record Indicador(Componente componente, double puntuacion,
                          Map<String, Double> puntuacionesPorVariable) {
