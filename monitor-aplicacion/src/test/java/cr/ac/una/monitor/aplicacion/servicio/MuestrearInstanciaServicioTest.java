@@ -1,5 +1,6 @@
 package cr.ac.una.monitor.aplicacion.servicio;
 
+import cr.ac.una.monitor.aplicacion.puerto.salida.RecoleccionFallidaException;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorArchivos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorMemoria;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesos;
@@ -157,7 +158,7 @@ class MuestrearInstanciaServicioTest {
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
-        assertThat(isbd.ip().puntuacion()).isCloseTo(0.0, offset(0.01));
+        assertThat(isbd.ip().orElseThrow().puntuacion()).isCloseTo(0.0, offset(0.01));
         assertThat(isbd.estado()).isEqualTo(Estado.CRITICO);
         assertThat(isbd.estadoPorVeto()).isTrue();
         assertThat(isbd.causas()).anyMatch(c -> c.contains("PROCESOS"));
@@ -213,7 +214,7 @@ class MuestrearInstanciaServicioTest {
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
         // IM = 0.4*100 (pga_uso_pct sano) + 0.3*0 (over_alloc con presión) + 0.3*100 (multipass sin cambio) = 70
-        assertThat(isbd.im().puntuacion()).isCloseTo(70.0, offset(0.01));
+        assertThat(isbd.im().orElseThrow().puntuacion()).isCloseTo(70.0, offset(0.01));
 
         Muestra memoriaGuardada = guardadas.stream()
             .filter(m -> m.componente() == Componente.MEMORIA)
@@ -279,5 +280,40 @@ class MuestrearInstanciaServicioTest {
         assertThat(fondoGuardada.valores().get("b3_dbwr_espera_avg")).isCloseTo(9.0, offset(0.001));
         assertThat(fondoGuardada.valores().get("b4_ckpt_switch_incompleto")).isCloseTo(2.0, offset(0.01));
         assertThat(fondoGuardada.instanciaReiniciada()).isFalse();
+    }
+
+    @Test
+    void un_componente_caido_no_tumba_el_ciclo_y_el_isbd_queda_parcial() {
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+
+        // MEMORIA no responde este ciclo (p. ej. Oracle caído) -- RecoleccionFallidaException,
+        // no una excepción cualquiera: es la que recolectarSeguro sabe atrapar.
+        RecolectorMemoria memoriaCaida = instancia -> {
+            throw new RecoleccionFallidaException(Componente.MEMORIA, instancia, new RuntimeException("ORA-12541"));
+        };
+
+        RecolectorArchivos archivosSanos = instancia -> new Muestra(Componente.ARCHIVOS, Instant.now(), Map.of(
+            "peor_tablespace_pct", 40.0, "a2_datafiles_offline", 0.0,
+            "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
+        ), false);
+
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
+            memoriaCaida, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, calibracionFalsa);
+
+        Isbd isbd = servicio.ejecutar(INSTANCIA);
+
+        assertThat(isbd.parcial()).isTrue();
+        assertThat(isbd.im()).isEmpty();
+        assertThat(isbd.ip()).isPresent();
+        assertThat(isbd.ia()).isPresent();
+        assertThat(isbd.estadoPorVeto()).isFalse();
+        assertThat(isbd.causas()).anyMatch(c -> c.contains("MEMORIA") && c.contains("fallo de recolección"));
+        // ni monitor_memoria ni monitor_procesos_fondo reciben una fila este ciclo para MEMORIA --
+        // solo se guardan procesos (usuarios), fondo y archivos: 3, no 4.
+        assertThat(muestrasGuardadas).hasSize(3);
+        assertThat(muestrasGuardadas).noneMatch(m -> m.componente() == Componente.MEMORIA);
     }
 }

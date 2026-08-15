@@ -1,6 +1,7 @@
 package cr.ac.una.monitor.aplicacion.servicio;
 
 import cr.ac.una.monitor.aplicacion.puerto.entrada.MuestrearInstancia;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RecoleccionFallidaException;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorArchivos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorMemoria;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesos;
@@ -19,12 +20,16 @@ import cr.ac.una.monitor.dominio.modelo.Indicador;
 import cr.ac.una.monitor.dominio.modelo.InstanciaId;
 import cr.ac.una.monitor.dominio.modelo.Isbd;
 import cr.ac.una.monitor.dominio.modelo.Muestra;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Caso de uso central: recolecta procesos (usuarios + fondo)/memoria/archivos
@@ -47,15 +52,20 @@ import java.util.Optional;
  * del intervalo contra RepositorioMuestrasFondo (tabla propia, ver esa
  * interfaz, porque Componente.PROCESOS es ambiguo entre usuarios y fondo).
  *
- * PENDIENTE (deliberado, para no fingir robustez que no existe todavía):
- * no hay manejo de fallo por componente ("recolectarSeguro" de la skill de
- * arquitectura) -- si un recolector lanza RecoleccionFallidaException, todo
- * el muestreo falla en vez de marcar ese componente como DESCONOCIDO y
- * seguir con los otros dos. Es lo próximo que hay que endurecer antes de
- * dejarlo corriendo con el planificador automático.
+ * Fallo por componente ("recolectarSeguro" de la skill de arquitectura): un
+ * RecoleccionFallidaException no tumba todo el muestreo. Ese componente
+ * queda Optional.empty() -- no se persiste, no entra en el cálculo -- y
+ * MotorIndicadores lo excluye del promedio (peso redistribuido) sin
+ * vetar, marcando el ISBD como parcial. Lo mismo aplica un nivel más abajo
+ * para IP: si falla solo procesos_usuarios o solo procesos_fondo, IP se
+ * calcula igual con el sub-indicador que sí llegó (CombinadorSubIndicadores
+ * ya redistribuye pesos entre lo que reciba); IP entero queda ausente solo
+ * si fallan los dos.
  */
 @Service
 public class MuestrearInstanciaServicio implements MuestrearInstancia {
+
+    private static final Logger log = LoggerFactory.getLogger(MuestrearInstanciaServicio.class);
 
     private final RecolectorProcesos procesosUsuarios;
     private final RecolectorProcesosFondo procesosFondo;
@@ -85,31 +95,68 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     public Isbd ejecutar(InstanciaId instancia) {
         Calibracion calibracionVigente = calibracionVigenteOInicial();
 
-        Muestra muestraUsuarios = procesosUsuarios.recolectar(instancia);
-        Muestra muestraFondoCruda = procesosFondo.recolectar(instancia);
-        Muestra muestraMemoriaCruda = memoria.recolectar(instancia);
-        Muestra muestraArchivos = archivos.recolectar(instancia);
+        Optional<Muestra> muestraUsuarios =
+            recolectarSeguro("procesos-usuarios", () -> procesosUsuarios.recolectar(instancia));
+        Optional<Muestra> muestraFondo = recolectarSeguro("procesos-fondo", () -> procesosFondo.recolectar(instancia))
+            .map(cruda -> conDeltasFondo(instancia, cruda));
+        Optional<Muestra> muestraMemoria = recolectarSeguro("memoria", () -> memoria.recolectar(instancia))
+            .map(cruda -> conDeltas(instancia, cruda));
+        Optional<Muestra> muestraArchivos = recolectarSeguro("archivos", () -> archivos.recolectar(instancia));
 
-        Muestra muestraFondo = conDeltasFondo(instancia, muestraFondoCruda);
-        Muestra muestraMemoria = conDeltas(instancia, muestraMemoriaCruda);
+        muestraUsuarios.ifPresent(m -> muestras.guardar(instancia, m));
+        muestraFondo.ifPresent(m -> muestrasFondo.guardar(instancia, m));
+        muestraMemoria.ifPresent(m -> muestras.guardar(instancia, m));
+        muestraArchivos.ifPresent(m -> muestras.guardar(instancia, m));
 
-        muestras.guardar(instancia, muestraUsuarios);
-        muestrasFondo.guardar(instancia, muestraFondo);
-        muestras.guardar(instancia, muestraMemoria);
-        muestras.guardar(instancia, muestraArchivos);
+        Optional<Indicador> ipUsuarios = muestraUsuarios.map(
+            m -> calculador.calcular(m, Componente.PROCESOS, UmbralesIniciales.procesosUsuarios()));
+        Optional<Indicador> ipFondo = muestraFondo.map(
+            m -> calculador.calcular(m, Componente.PROCESOS, UmbralesIniciales.procesosFondo()));
+        Optional<Indicador> ip = combinarIp(ipUsuarios, ipFondo);
 
-        Indicador ipUsuarios = calculador.calcular(
-            muestraUsuarios, Componente.PROCESOS, UmbralesIniciales.procesosUsuarios());
-        Indicador ipFondo = calculador.calcular(
-            muestraFondo, Componente.PROCESOS, UmbralesIniciales.procesosFondo());
-        Indicador ip = combinador.combinar(Componente.PROCESOS,
-            Map.of("usuarios", ipUsuarios, "fondo", ipFondo),
-            Map.of("usuarios", UmbralesIniciales.PESO_IP_USUARIOS, "fondo", UmbralesIniciales.PESO_IP_FONDO));
-
-        Indicador im = calculador.calcular(muestraMemoria, Componente.MEMORIA, UmbralesIniciales.memoria());
-        Indicador ia = calculador.calcular(muestraArchivos, Componente.ARCHIVOS, UmbralesIniciales.archivos());
+        Optional<Indicador> im = muestraMemoria.map(
+            m -> calculador.calcular(m, Componente.MEMORIA, UmbralesIniciales.memoria()));
+        Optional<Indicador> ia = muestraArchivos.map(
+            m -> calculador.calcular(m, Componente.ARCHIVOS, UmbralesIniciales.archivos()));
 
         return motor.calcular(Instant.now(), ip, im, ia, calibracionVigente);
+    }
+
+    /**
+     * IP_usuarios/IP_fondo redistribuyen peso entre sí igual que MotorIndicadores
+     * hace con PROCESOS/MEMORIA/ARCHIVOS -- si solo uno de los dos llegó, IP se
+     * calcula con ese único sub-indicador. Solo si fallan ambos, IP entero queda
+     * ausente y así llega a MotorIndicadores (excluido, sin vetar).
+     */
+    private Optional<Indicador> combinarIp(Optional<Indicador> usuarios, Optional<Indicador> fondo) {
+        Map<String, Indicador> presentes = new LinkedHashMap<>();
+        Map<String, Double> pesos = new LinkedHashMap<>();
+        usuarios.ifPresent(i -> {
+            presentes.put("usuarios", i);
+            pesos.put("usuarios", UmbralesIniciales.PESO_IP_USUARIOS);
+        });
+        fondo.ifPresent(i -> {
+            presentes.put("fondo", i);
+            pesos.put("fondo", UmbralesIniciales.PESO_IP_FONDO);
+        });
+        if (presentes.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(combinador.combinar(Componente.PROCESOS, presentes, pesos));
+    }
+
+    /**
+     * Un RecoleccionFallidaException es un dato de salud, no un error que tumbe
+     * el ciclo entero: se registra y ese componente queda Optional.empty() para
+     * este muestreo (ver javadoc de la clase).
+     */
+    private Optional<Muestra> recolectarSeguro(String etiqueta, Supplier<Muestra> recoleccion) {
+        try {
+            return Optional.of(recoleccion.get());
+        } catch (RecoleccionFallidaException e) {
+            log.warn("Fallo recolectando {}: {}", etiqueta, e.getMessage());
+            return Optional.empty();
+        }
     }
 
     /**

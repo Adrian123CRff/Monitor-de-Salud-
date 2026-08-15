@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.offset;
 
 class MotorIndicadoresTest {
@@ -18,8 +20,8 @@ class MotorIndicadoresTest {
     private final MotorIndicadores motor = new MotorIndicadores();
     private final Instant ahora = Instant.parse("2026-08-13T22:00:00Z");
 
-    private static Indicador indicador(Componente c, double puntuacion) {
-        return new Indicador(c, puntuacion, Map.of());
+    private static Optional<Indicador> indicador(Componente c, double puntuacion) {
+        return Optional.of(new Indicador(c, puntuacion, Map.of()));
     }
 
     @Test
@@ -34,6 +36,7 @@ class MotorIndicadoresTest {
         assertThat(isbd.estado()).isEqualTo(Estado.SALUDABLE);
         assertThat(isbd.estadoPorVeto()).isFalse();
         assertThat(isbd.causas()).isEmpty();
+        assertThat(isbd.parcial()).isFalse();
     }
 
     @Test
@@ -98,5 +101,32 @@ class MotorIndicadoresTest {
         assertThat(isbd.estadoPorVeto()).isFalse();
         assertThat(isbd.causas()).isEmpty();
         assertThat(isbd.estado()).isEqualTo(Estado.desdePuntuacion(isbd.puntuacion()));
+    }
+
+    @Test
+    void un_componente_ausente_se_excluye_y_redistribuye_el_peso_sin_vetar() {
+        // MEMORIA no se pudo recolectar este ciclo (RecoleccionFallidaException,
+        // ver MuestrearInstanciaServicio.recolectarSeguro) -- no es lo mismo que
+        // "está mal": no debe vetar ni entrar en el promedio como si fuera 0.
+        Isbd isbd = motor.calcular(ahora,
+            indicador(Componente.PROCESOS, 85),
+            Optional.empty(),
+            indicador(Componente.ARCHIVOS, 90),
+            Calibracion.inicial());
+
+        double esperado = (0.30 * 85 + 0.35 * 90) / (0.30 + 0.35);
+        assertThat(isbd.puntuacion()).isCloseTo(esperado, offset(0.01));
+        assertThat(isbd.parcial()).isTrue();
+        assertThat(isbd.estadoPorVeto()).isFalse();
+        assertThat(isbd.im()).isEmpty();
+        assertThat(isbd.causas()).containsExactly("MEMORIA: fallo de recolección, excluido del cálculo");
+    }
+
+    @Test
+    void si_no_se_pudo_recolectar_ningun_componente_no_hay_nada_que_calcular() {
+        assertThatIllegalStateException()
+            .isThrownBy(() -> motor.calcular(ahora, Optional.empty(), Optional.empty(), Optional.empty(),
+                Calibracion.inicial()))
+            .withMessageContaining("nada que calcular");
     }
 }
