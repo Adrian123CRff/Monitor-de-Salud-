@@ -6,6 +6,7 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorMemoria;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioIndices;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioTablespaces;
@@ -90,8 +91,36 @@ class MuestrearInstanciaServicioTest {
     };
 
     private final List<DetalleTablespace> tablespacesGuardados = new ArrayList<>();
-    private final RepositorioTablespaces repositorioTablespacesFalso =
-        (instancia, momento, detalle) -> tablespacesGuardados.addAll(detalle);
+    private final RepositorioTablespaces repositorioTablespacesFalso = new RepositorioTablespaces() {
+        @Override
+        public void guardar(InstanciaId instancia, Instant momento, List<DetalleTablespace> detalle) {
+            tablespacesGuardados.addAll(detalle);
+        }
+
+        @Override
+        public List<DetalleTablespace> ultimo(InstanciaId instancia) {
+            return List.copyOf(tablespacesGuardados);
+        }
+    };
+
+    private final List<Isbd> indicesGuardados = new ArrayList<>();
+    private final RepositorioIndices repositorioIndicesFalso = new RepositorioIndices() {
+        @Override
+        public void guardar(InstanciaId instancia, Isbd isbd) {
+            indicesGuardados.add(isbd);
+        }
+
+        @Override
+        public Optional<Isbd> ultimo(InstanciaId instancia) {
+            return indicesGuardados.isEmpty()
+                ? Optional.empty() : Optional.of(indicesGuardados.get(indicesGuardados.size() - 1));
+        }
+
+        @Override
+        public List<Isbd> enRango(InstanciaId instancia, Instant desde, Instant hasta) {
+            return List.copyOf(indicesGuardados);
+        }
+    };
 
     private final RepositorioCalibracion calibracionFalsa = new RepositorioCalibracion() {
         @Override
@@ -131,7 +160,7 @@ class MuestrearInstanciaServicioTest {
         ), false);
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
-            archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
             calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
@@ -162,7 +191,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosCriticos, FONDO_CRITICO,
             memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -217,7 +246,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaConPresionDePga, archivosSanos, repositorioConHistorial, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -280,7 +309,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, fondoConEsperas,
             memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioFondoConHistorial,
-            repositorioTablespacesFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, calibracionFalsa);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -311,7 +340,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaCaida, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -356,7 +385,7 @@ class MuestrearInstanciaServicioTest {
         };
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
-            archivosConDetalle, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            archivosConDetalle, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
             calibracionFalsa);
 
         servicio.ejecutar(INSTANCIA);

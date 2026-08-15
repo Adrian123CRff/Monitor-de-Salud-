@@ -16,4 +16,7 @@ import java.util.List;
 public interface RepositorioTablespaces {
 
     void guardar(InstanciaId instancia, Instant momento, List<DetalleTablespace> detalle);
+
+    /** El detalle completo del último ciclo (todas las filas del muestreado_en más reciente). */
+    List<DetalleTablespace> ultimo(InstanciaId instancia);
 }

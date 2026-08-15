@@ -7,6 +7,7 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorMemoria;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioIndices;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioTablespaces;
@@ -70,6 +71,12 @@ import java.util.function.Supplier;
  * no entra en el cálculo del ISBD (CalculadorComponente ya usa el peor
  * tablespace vía a4_peor_tablespace_pct); su propio fallo no debe tumbar
  * el resto del ciclo, por eso también pasa por recolectarSeguro.
+ *
+ * El propio Isbd se persiste en RepositorioIndices (MONITOR_INDICES,
+ * existía la tabla desde V1 sin usar) al final de cada ciclo -- lo que
+ * hace posible ConsultarSalud (último calculado, sin forzar un muestreo
+ * nuevo) y ConsultarHistorico, ambos puerto/entrada sin implementación
+ * hasta ahora.
  */
 @Service
 public class MuestrearInstanciaServicio implements MuestrearInstancia {
@@ -83,6 +90,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     private final RepositorioMuestras muestras;
     private final RepositorioMuestrasFondo muestrasFondo;
     private final RepositorioTablespaces tablespaces;
+    private final RepositorioIndices indices;
     private final RepositorioCalibracion calibraciones;
     private final CalculadorComponente calculador = new CalculadorComponente();
     private final CombinadorSubIndicadores combinador = new CombinadorSubIndicadores();
@@ -91,7 +99,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     public MuestrearInstanciaServicio(RecolectorProcesos procesosUsuarios, RecolectorProcesosFondo procesosFondo,
             RecolectorMemoria memoria, RecolectorArchivos archivos,
             RepositorioMuestras muestras, RepositorioMuestrasFondo muestrasFondo,
-            RepositorioTablespaces tablespaces, RepositorioCalibracion calibraciones) {
+            RepositorioTablespaces tablespaces, RepositorioIndices indices, RepositorioCalibracion calibraciones) {
         this.procesosUsuarios = procesosUsuarios;
         this.procesosFondo = procesosFondo;
         this.memoria = memoria;
@@ -99,6 +107,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         this.muestras = muestras;
         this.muestrasFondo = muestrasFondo;
         this.tablespaces = tablespaces;
+        this.indices = indices;
         this.calibraciones = calibraciones;
     }
 
@@ -134,7 +143,9 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         Optional<Indicador> ia = muestraArchivos.map(
             m -> calculador.calcular(m, Componente.ARCHIVOS, UmbralesIniciales.archivos()));
 
-        return motor.calcular(Instant.now(), ip, im, ia, calibracionVigente);
+        Isbd isbd = motor.calcular(Instant.now(), ip, im, ia, calibracionVigente);
+        indices.guardar(instancia, isbd);
+        return isbd;
     }
 
     /**

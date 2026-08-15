@@ -8,6 +8,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 import javax.sql.DataSource;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -40,5 +42,29 @@ public class JdbcRepositorioTablespaces implements RepositorioTablespaces {
                 .param("max_bytes", ts.maxBytes())
                 .update();
         }
+    }
+
+    @Override
+    public List<DetalleTablespace> ultimo(InstanciaId instancia) {
+        return jdbc.sql("""
+                SELECT tablespace_name, used_percent, used_bytes, max_bytes
+                FROM monitor_tablespace
+                WHERE instancia_id = :instancia_id
+                AND muestreado_en = (
+                    SELECT MAX(muestreado_en) FROM monitor_tablespace WHERE instancia_id = :instancia_id
+                )
+                ORDER BY tablespace_name
+                """)
+            .param("instancia_id", instancia.valor())
+            .query(this::mapear)
+            .list();
+    }
+
+    private DetalleTablespace mapear(ResultSet rs, int rowNum) throws SQLException {
+        return new DetalleTablespace(
+            rs.getString("tablespace_name"),
+            rs.getDouble("used_percent"),
+            rs.getDouble("used_bytes"),
+            rs.getDouble("max_bytes"));
     }
 }

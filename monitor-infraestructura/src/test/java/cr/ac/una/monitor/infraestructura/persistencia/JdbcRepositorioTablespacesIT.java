@@ -85,4 +85,21 @@ class JdbcRepositorioTablespacesIT {
             }
         }
     }
+
+    @Test
+    void ultimo_devuelve_solo_las_filas_del_ciclo_mas_reciente() {
+        JdbcRepositorioTablespaces repositorio = new JdbcRepositorioTablespaces(dataSource);
+        // Ciclo viejo, no debería aparecer en ultimo().
+        repositorio.guardar(INSTANCIA, Instant.now().minusSeconds(120),
+            List.of(new DetalleTablespace("VIEJO", 1.0, 1.0, 1.0)));
+        List<DetalleTablespace> detalleReciente = List.of(
+            new DetalleTablespace("SYSTEM", 40.0, 400.0, 1000.0),
+            new DetalleTablespace("USERS", 10.0, 100.0, 1000.0));
+        repositorio.guardar(INSTANCIA, Instant.now(), detalleReciente);
+
+        List<DetalleTablespace> ultimo = repositorio.ultimo(INSTANCIA);
+
+        assertThat(ultimo).extracting(DetalleTablespace::nombre).containsExactlyInAnyOrder("SYSTEM", "USERS");
+        assertThat(ultimo).noneMatch(ts -> ts.nombre().equals("VIEJO"));
+    }
 }
