@@ -35,10 +35,9 @@ import java.util.stream.Collectors;
  * que filtra cuáles sí se guardan -- sin ella, guardar() intentaría
  * insertar en columnas que no existen.
  *
- * PENDIENTE: enRango() no está implementado. Ningún endpoint de histórico
- * existe todavía que lo necesite; se implementa cuando haga falta en vez
- * de adivinar la forma correcta (paginación, granularidad) sin un
- * consumidor real.
+ * enRango() no pagina ni resume por granularidad: el puerto no pide eso
+ * (List<Muestra> plano), y no hay todavía un endpoint de histórico que
+ * necesite más -- se amplía cuando haga falta, no antes.
  */
 @Repository
 public class JdbcRepositorioMuestras implements RepositorioMuestras {
@@ -113,8 +112,15 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
 
     @Override
     public List<Muestra> enRango(InstanciaId instancia, Componente componente, Instant desde, Instant hasta) {
-        throw new UnsupportedOperationException(
-            "enRango no está implementado todavía: no hay ningún endpoint de histórico que lo consuma aún.");
+        String tabla = tabla(componente);
+        return jdbc.sql("SELECT * FROM " + tabla + " WHERE instancia_id = :instancia_id "
+                + "AND muestreado_en BETWEEN :desde AND :hasta "
+                + "ORDER BY muestreado_en ASC")
+            .param("instancia_id", instancia.valor())
+            .param("desde", OffsetDateTime.ofInstant(desde, ZoneOffset.UTC))
+            .param("hasta", OffsetDateTime.ofInstant(hasta, ZoneOffset.UTC))
+            .query((rs, rowNum) -> mapearFila(rs, componente))
+            .list();
     }
 
     private Muestra mapearFila(ResultSet rs, Componente componente) throws SQLException {

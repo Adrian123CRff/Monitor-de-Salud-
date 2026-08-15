@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -79,5 +80,27 @@ class JdbcRepositorioMuestrasIT {
         // util_procesos_pct es derivada, no tiene columna en el esquema (modelo-datos.md
         // decisión #2: solo se guardan crudos) -- correcto que no sobreviva el guardar/ultima.
         assertThat(recuperada.get().valores()).doesNotContainKey("util_procesos_pct");
+    }
+
+    @Test
+    void enRango_devuelve_solo_las_muestras_dentro_del_intervalo_ordenadas_por_tiempo() {
+        JdbcRepositorioMuestras repositorio = new JdbcRepositorioMuestras(dataSource);
+        // Fechas fijas en el pasado -- evita colisión con "Instant.now()" que insertan
+        // otros tests de esta misma clase en la misma tabla/instancia.
+        Instant t1 = Instant.parse("2020-01-01T00:00:00Z");
+        Instant t2 = Instant.parse("2020-01-01T01:00:00Z");
+        Instant t3 = Instant.parse("2020-01-01T02:00:00Z");
+
+        repositorio.guardar(INSTANCIA, new Muestra(Componente.ARCHIVOS, t1, Map.of("a1_datafiles_online", 1.0), false));
+        repositorio.guardar(INSTANCIA, new Muestra(Componente.ARCHIVOS, t2, Map.of("a1_datafiles_online", 2.0), false));
+        repositorio.guardar(INSTANCIA, new Muestra(Componente.ARCHIVOS, t3, Map.of("a1_datafiles_online", 3.0), false));
+
+        List<Muestra> enRango = repositorio.enRango(INSTANCIA, Componente.ARCHIVOS, t1.plusSeconds(1), t3);
+
+        assertThat(enRango).hasSize(2);
+        assertThat(enRango.get(0).momento()).isEqualTo(t2);
+        assertThat(enRango.get(0).valores().get("a1_datafiles_online")).isCloseTo(2.0, offset(0.01));
+        assertThat(enRango.get(1).momento()).isEqualTo(t3);
+        assertThat(enRango.get(1).valores().get("a1_datafiles_online")).isCloseTo(3.0, offset(0.01));
     }
 }
