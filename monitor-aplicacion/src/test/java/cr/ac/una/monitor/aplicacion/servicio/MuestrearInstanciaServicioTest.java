@@ -3,6 +3,7 @@ package cr.ac.una.monitor.aplicacion.servicio;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorArchivos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorMemoria;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesos;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.dominio.calibracion.Calibracion;
@@ -30,6 +31,22 @@ import static org.assertj.core.api.Assertions.offset;
 class MuestrearInstanciaServicioTest {
 
     private static final InstanciaId INSTANCIA = new InstanciaId(1L);
+
+    private static final RecolectorProcesosFondo FONDO_SANO = instancia -> new Muestra(
+        Componente.PROCESOS, Instant.now(), Map.of(
+            "b1_procesos_caidos", 0.0,
+            "b2_lgwr_espera_avg", 0.0,
+            "b3_dbwr_espera_avg", 0.0,
+            "b4_ckpt_switch_incompleto", 0.0
+        ), false);
+
+    private static final RecolectorProcesosFondo FONDO_CRITICO = instancia -> new Muestra(
+        Componente.PROCESOS, Instant.now(), Map.of(
+            "b1_procesos_caidos", 1.0,   // un proceso mandatorio caído -> veta esta variable
+            "b2_lgwr_espera_avg", 15.0,  // por encima del crítico (10)
+            "b3_dbwr_espera_avg", 15.0,
+            "b4_ckpt_switch_incompleto", 10.0
+        ), false);
 
     private final List<Muestra> muestrasGuardadas = new ArrayList<>();
     private final RepositorioMuestras repositorioMuestrasFalso = new RepositorioMuestras() {
@@ -85,21 +102,19 @@ class MuestrearInstanciaServicioTest {
         ), false);
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(
-            procesosSanos, memoriaSana, archivosSanos, repositorioMuestrasFalso, calibracionFalsa);
+            procesosSanos, FONDO_SANO, memoriaSana, archivosSanos, repositorioMuestrasFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
         assertThat(isbd.puntuacion()).isCloseTo(100.0, offset(0.01));
         assertThat(isbd.estado()).isEqualTo(Estado.OPTIMO);
         assertThat(isbd.estadoPorVeto()).isFalse();
+        // procesos de fondo aún no se persisten (pendiente), por eso 3 y no 4.
         assertThat(muestrasGuardadas).hasSize(3);
     }
 
     @Test
     void procesos_criticos_veta_el_isbd_aunque_memoria_y_archivos_esten_perfectos() {
-        // p6=4 bloqueos -> 100 - 4*25 = 0; util_procesos y util_sesiones sanos,
-        // bloqueo_max_seg sano -> IP = (100+100+0+100)/4 = 75... insuficiente para
-        // vetar por sí solo. Subimos la utilización también para forzar IP < 40.
         RecolectorProcesos procesosCriticos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
             "util_procesos_pct", 95.0,   // 0 puntos
             "util_sesiones_pct", 95.0,   // 0 puntos
@@ -117,7 +132,7 @@ class MuestrearInstanciaServicioTest {
         ), false);
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(
-            procesosCriticos, memoriaSana, archivosSanos, repositorioMuestrasFalso, calibracionFalsa);
+            procesosCriticos, FONDO_CRITICO, memoriaSana, archivosSanos, repositorioMuestrasFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 

@@ -33,7 +33,7 @@ class CalculadorComponenteTest {
     @Test
     void una_instancia_sana_da_una_puntuacion_alta() {
         Indicador ip = calculador.calcular(
-            muestraProcesos(30, 25, 0, 0), Componente.PROCESOS, UmbralesIniciales.procesos());
+            muestraProcesos(30, 25, 0, 0), Componente.PROCESOS, UmbralesIniciales.procesosUsuarios());
 
         assertThat(ip.puntuacion()).isCloseTo(100.0, offset(0.01));
         assertThat(ip.componente()).isEqualTo(Componente.PROCESOS);
@@ -42,9 +42,9 @@ class CalculadorComponenteTest {
     @Test
     void los_bloqueos_penalizan_aunque_la_utilizacion_este_bien() {
         Indicador sano = calculador.calcular(
-            muestraProcesos(30, 25, 0, 0), Componente.PROCESOS, UmbralesIniciales.procesos());
+            muestraProcesos(30, 25, 0, 0), Componente.PROCESOS, UmbralesIniciales.procesosUsuarios());
         Indicador conBloqueos = calculador.calcular(
-            muestraProcesos(30, 25, 2, 10), Componente.PROCESOS, UmbralesIniciales.procesos());
+            muestraProcesos(30, 25, 2, 10), Componente.PROCESOS, UmbralesIniciales.procesosUsuarios());
 
         assertThat(conBloqueos.puntuacion()).isLessThan(sano.puntuacion());
         assertThat(conBloqueos.puntuacionesPorVariable().get("p6_sesiones_bloqueadas")).isCloseTo(50.0, offset(0.01));
@@ -76,7 +76,7 @@ class CalculadorComponenteTest {
             "p6_sesiones_bloqueadas", 0.0
         ), false);
 
-        Indicador ip = calculador.calcular(muestraParcial, Componente.PROCESOS, UmbralesIniciales.procesos());
+        Indicador ip = calculador.calcular(muestraParcial, Componente.PROCESOS, UmbralesIniciales.procesosUsuarios());
 
         assertThat(ip.puntuacionesPorVariable()).doesNotContainKey("bloqueo_max_seg");
         assertThat(ip.puntuacion()).isCloseTo(100.0, offset(0.01));
@@ -87,7 +87,7 @@ class CalculadorComponenteTest {
         Muestra muestraVacia = new Muestra(Componente.PROCESOS, ahora, Map.of("variable_que_no_existe", 1.0), false);
 
         assertThatIllegalStateException()
-            .isThrownBy(() -> calculador.calcular(muestraVacia, Componente.PROCESOS, UmbralesIniciales.procesos()));
+            .isThrownBy(() -> calculador.calcular(muestraVacia, Componente.PROCESOS, UmbralesIniciales.procesosUsuarios()));
     }
 
     @Test

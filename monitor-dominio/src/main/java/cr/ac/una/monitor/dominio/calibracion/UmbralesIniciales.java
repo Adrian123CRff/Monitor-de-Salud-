@@ -16,23 +16,55 @@ import static cr.ac.una.monitor.dominio.calibracion.TipoUmbral.LINEAL_INVERTIDA;
  * distribución equitativa..."). La misma skill señala que p6 (sesiones
  * bloqueadas) y peor_tablespace_pct son las variables más valiosas de sus
  * componentes; vale la pena revisar si merecen más peso una vez haya datos
- * reales -- pendiente P4 / calibración del registro de decisiones.
+ * reales -- pendiente calibración del registro de decisiones.
  *
  * PENDIENTE: no cubre todavía p7 (contexto, correcto no incluirlo), m1-m6
- * (contexto), a1/a3/a5/a6 (contexto o sin normalizar aún), ni la subdivisión
- * IP_usuarios / IP_fondo (P4).
+ * (contexto), a1/a3/a5/a6 (contexto o sin normalizar aún).
+ *
+ * IP_usuarios / IP_fondo (antes P4, ver ADR 0006): PROCESOS ya no es un
+ * único indicador plano -- procesosUsuarios() y procesosFondo() se
+ * calculan por separado y se combinan con PESO_IP_USUARIOS/PESO_IP_FONDO
+ * (ver CombinadorSubIndicadores).
  */
 public final class UmbralesIniciales {
+
+    /** Pesos para combinar IP_usuarios e IP_fondo en el IP final. Ver ADR 0006. */
+    public static final double PESO_IP_USUARIOS = 0.40;
+    public static final double PESO_IP_FONDO = 0.60;
 
     private UmbralesIniciales() {
     }
 
-    public static List<Umbral> procesos() {
+    /**
+     * Procesos y sesiones iniciados por usuarios (V$SESSION TYPE='USER').
+     * Antes se llamaba simplemente procesos() -- ver ADR 0006.
+     */
+    public static List<Umbral> procesosUsuarios() {
         return List.of(
             Umbral.lineal("util_procesos_pct", LINEAL_INVERTIDA, 70, 95, 0.25),
             Umbral.lineal("util_sesiones_pct", LINEAL_INVERTIDA, 70, 95, 0.25),
             Umbral.penalizacion("p6_sesiones_bloqueadas", 25, 0.25),
             Umbral.lineal("bloqueo_max_seg", LINEAL_INVERTIDA, 5, 120, 0.25));
+    }
+
+    /**
+     * Procesos de fondo mandatorios: DBW0 (DBWR), LGWR, CKPT, PMON, SMON
+     * (ver ADR 0006 y la transcripción de clase BD13-8). b1 es la variable
+     * más severa -- si un proceso mandatorio no está activo, no hay grado
+     * intermedio, por eso pesa más que las demás dentro del componente.
+     *
+     * b2/b3 son promedios acumulados desde el arranque de la instancia
+     * (AVERAGE_WAIT de V$SYSTEM_EVENT, en centésimas de segundo) -- mismo
+     * problema que m9_cache_hit_pct: se vuelven menos sensibles con el
+     * tiempo. Documentado, no oculto; normalizar sobre la delta es trabajo
+     * futuro, igual que con memoria.
+     */
+    public static List<Umbral> procesosFondo() {
+        return List.of(
+            Umbral.criticoSiHayAlguno("b1_procesos_caidos", 0.40),
+            Umbral.lineal("b2_lgwr_espera_avg", LINEAL_INVERTIDA, 1, 10, 0.25),
+            Umbral.lineal("b3_dbwr_espera_avg", LINEAL_INVERTIDA, 1, 10, 0.20),
+            Umbral.penalizacion("b4_ckpt_switch_incompleto", 20, 0.15));
     }
 
     public static List<Umbral> memoria() {
