@@ -8,19 +8,36 @@ spring:
     # La instancia Oracle monitoreada NUNCA se migra.
 
 monitor:
+  # Instancia fija (ADR 0001: una sola instancia Oracle en Docker, no
+  # multi-tenant) -- corresponde a la fila 'id' en monitor_instancia.
+  # No hay RepositorioInstancias todavía; se amplía si el proyecto crece
+  # a varias instancias.
+  instancia-id: 1
   datasource:
+    # jdbc-url, no url: DataSourceConfig bindea @ConfigurationProperties
+    # directamente sobre el HikariDataSource ya construido (sin pasar por la
+    # traducción de nombres que hace DataSourceBuilder cuando arma él mismo
+    # las propiedades) -- el setter real es setJdbcUrl(), "url" se ignora en
+    # silencio y el pool arranca sin URL. Verificado en vivo: sin este
+    # nombre, el arranque de la app "funciona" pero el primer intento real
+    # de usar el DataSource revienta con "dataSource or dataSourceClassName
+    # or jdbcUrl is required".
     monitoreada:
-      url: jdbc:oracle:thin:@//localhost:1521/FREE
+      jdbc-url: jdbc:oracle:thin:@//localhost:1521/FREE
       username: c##monitor
       password: ${MONITOR_DB_PASSWORD:MonitorPass123}
     historico:
-      url: jdbc:postgresql://localhost:5432/monitor_historico
+      jdbc-url: jdbc:postgresql://localhost:5432/monitor_historico
       username: ${HISTORICO_DB_USER:monitor}
       password: ${HISTORICO_DB_PASSWORD:HistoricoPass123}
   muestreo:
-    procesos:  PT30S      # ISO-8601 Duration
-    memoria:   PT60S
-    archivos:  PT10M
+    # Un solo intervalo, no uno por componente: MuestrearInstanciaServicio.ejecutar()
+    # recolecta procesos+memoria+archivos juntos en un solo ciclo (así el ISBD
+    # combina IP/IM/IA del MISMO instante, en vez de mezclar datos de edades
+    # distintas). Efecto secundario aceptado: DBA_TABLESPACE_USAGE_METRICS
+    # (pensada para consultarse cada ~10 min) se consulta más seguido -- a la
+    # escala de este proyecto (Oracle Free en Docker) no es un problema real.
+    intervalo: PT60S      # ISO-8601 Duration
   pesos:
     # ADR 0003 / documento de diseño, sección 17: propuesta inicial, no calibrada.
     procesos: 0.30
