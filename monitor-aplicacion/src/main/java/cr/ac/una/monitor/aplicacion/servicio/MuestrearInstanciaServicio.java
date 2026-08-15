@@ -6,6 +6,7 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorArchivos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorMemoria;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioAlertas;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioIndices;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
@@ -15,9 +16,17 @@ import cr.ac.una.monitor.dominio.agregacion.CalculadorComponente;
 import cr.ac.una.monitor.dominio.agregacion.CalculadorDelta;
 import cr.ac.una.monitor.dominio.agregacion.CombinadorSubIndicadores;
 import cr.ac.una.monitor.dominio.agregacion.MotorIndicadores;
+import cr.ac.una.monitor.dominio.alertas.Alerta;
+import cr.ac.una.monitor.dominio.alertas.AlertasIniciales;
+import cr.ac.una.monitor.dominio.alertas.EvaluadorNivel;
+import cr.ac.una.monitor.dominio.alertas.MotorAlertas;
+import cr.ac.una.monitor.dominio.alertas.Nivel;
+import cr.ac.una.monitor.dominio.alertas.ResultadoEvaluacion;
+import cr.ac.una.monitor.dominio.alertas.UmbralAlerta;
 import cr.ac.una.monitor.dominio.calibracion.Calibracion;
 import cr.ac.una.monitor.dominio.calibracion.UmbralesIniciales;
 import cr.ac.una.monitor.dominio.modelo.Componente;
+import cr.ac.una.monitor.dominio.modelo.DetalleTablespace;
 import cr.ac.una.monitor.dominio.modelo.Indicador;
 import cr.ac.una.monitor.dominio.modelo.InstanciaId;
 import cr.ac.una.monitor.dominio.modelo.Isbd;
@@ -29,8 +38,10 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.DoubleFunction;
 import java.util.function.Supplier;
 
 /**
@@ -77,6 +88,17 @@ import java.util.function.Supplier;
  * hace posible ConsultarSalud (último calculado, sin forzar un muestreo
  * nuevo) y ConsultarHistorico, ambos puerto/entrada sin implementación
  * hasta ahora.
+ *
+ * Alertas (dominio.alertas, MONITOR_ALERTAS): se evalúan solo para las
+ * variables de AlertasIniciales (a2_datafiles_offline y peor_tablespace_pct
+ * por tablespace), y solo si el agregado de archivos se pudo leer este
+ * ciclo -- mismo criterio que el detalle de tablespaces. Cada evaluación
+ * consulta la alerta abierta (si hay), calcula el nivel con histéresis
+ * (EvaluadorNivel) y deja que MotorAlertas decida abrir/cerrar/escalar
+ * (ver ResultadoEvaluacion). ConfirmadorTemporal existe pero no está
+ * conectado aquí todavía: ninguna de las dos variables iniciales lo
+ * necesita (ver AlertasIniciales); sesiones bloqueadas y presión de PGA
+ * sí lo necesitarían cuando se agreguen.
  */
 @Service
 public class MuestrearInstanciaServicio implements MuestrearInstancia {
@@ -91,15 +113,18 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     private final RepositorioMuestrasFondo muestrasFondo;
     private final RepositorioTablespaces tablespaces;
     private final RepositorioIndices indices;
+    private final RepositorioAlertas alertas;
     private final RepositorioCalibracion calibraciones;
     private final CalculadorComponente calculador = new CalculadorComponente();
     private final CombinadorSubIndicadores combinador = new CombinadorSubIndicadores();
     private final MotorIndicadores motor = new MotorIndicadores();
+    private final MotorAlertas motorAlertas = new MotorAlertas();
 
     public MuestrearInstanciaServicio(RecolectorProcesos procesosUsuarios, RecolectorProcesosFondo procesosFondo,
             RecolectorMemoria memoria, RecolectorArchivos archivos,
             RepositorioMuestras muestras, RepositorioMuestrasFondo muestrasFondo,
-            RepositorioTablespaces tablespaces, RepositorioIndices indices, RepositorioCalibracion calibraciones) {
+            RepositorioTablespaces tablespaces, RepositorioIndices indices, RepositorioAlertas alertas,
+            RepositorioCalibracion calibraciones) {
         this.procesosUsuarios = procesosUsuarios;
         this.procesosFondo = procesosFondo;
         this.memoria = memoria;
@@ -108,6 +133,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         this.muestrasFondo = muestrasFondo;
         this.tablespaces = tablespaces;
         this.indices = indices;
+        this.alertas = alertas;
         this.calibraciones = calibraciones;
     }
 
@@ -128,8 +154,12 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         muestraMemoria.ifPresent(m -> muestras.guardar(instancia, m));
         muestraArchivos.ifPresent(m -> {
             muestras.guardar(instancia, m);
-            recolectarSeguro("tablespaces", () -> archivos.recolectarTablespaces(instancia))
-                .ifPresent(detalle -> tablespaces.guardar(instancia, m.momento(), detalle));
+            List<DetalleTablespace> detalleTablespaces =
+                recolectarSeguro("tablespaces", () -> archivos.recolectarTablespaces(instancia)).orElse(List.of());
+            if (!detalleTablespaces.isEmpty()) {
+                tablespaces.guardar(instancia, m.momento(), detalleTablespaces);
+            }
+            evaluarAlertas(instancia, m, detalleTablespaces);
         });
 
         Optional<Indicador> ipUsuarios = muestraUsuarios.map(
@@ -169,6 +199,54 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
             return Optional.empty();
         }
         return Optional.of(combinador.combinar(Componente.PROCESOS, presentes, pesos));
+    }
+
+    /** Ver AlertasIniciales: por ahora, datafiles offline (binaria) y peor_tablespace_pct por tablespace. */
+    private void evaluarAlertas(InstanciaId instancia, Muestra muestraArchivos, List<DetalleTablespace> detalle) {
+        evaluarAlertaSimple(instancia, Componente.ARCHIVOS, AlertasIniciales.datafilesOffline(),
+            muestraArchivos.valor("a2_datafiles_offline"), Optional.empty(),
+            valor -> "Datafiles offline: %d (umbral: 1).".formatted((int) valor));
+
+        for (DetalleTablespace ts : detalle) {
+            evaluarAlertaSimple(instancia, Componente.ARCHIVOS, AlertasIniciales.peorTablespacePct(),
+                ts.usedPercent(), Optional.of(ts.nombre()),
+                valor -> "Tablespace %s al %.1f%%.".formatted(ts.nombre(), valor));
+        }
+    }
+
+    /**
+     * Consulta la alerta abierta de (instancia, variable, entidad), calcula el
+     * nivel con histéresis contra el nivel anterior (NORMAL si no había ninguna
+     * abierta), y deja que MotorAlertas decida abrir/cerrar/escalar.
+     */
+    private void evaluarAlertaSimple(InstanciaId instancia, Componente componente, UmbralAlerta u, double valor,
+            Optional<String> entidad, DoubleFunction<String> descripcion) {
+        Optional<Alerta> abierta = alertas.buscarAbierta(instancia, u.variable(), entidad);
+        Nivel nivelAnterior = abierta.map(Alerta::nivel).orElse(Nivel.NORMAL);
+        Nivel nivelNuevo = EvaluadorNivel.evaluar(valor, nivelAnterior, u);
+        Instant ahora = Instant.now();
+
+        ResultadoEvaluacion resultado = motorAlertas.evaluar(nivelNuevo, abierta, () -> new Alerta(
+            null, instancia, componente, u.variable(), entidad, nivelNuevo, valor, umbralDe(nivelNuevo, u),
+            descripcion.apply(valor), ahora, Optional.empty()));
+
+        switch (resultado) {
+            case ResultadoEvaluacion.SinCambios ignored -> { }
+            case ResultadoEvaluacion.Abrir r -> alertas.abrir(r.nueva());
+            case ResultadoEvaluacion.Cerrar r -> alertas.cerrar(r.existente(), ahora);
+            case ResultadoEvaluacion.CerrarYAbrir r -> {
+                alertas.cerrar(r.aCerrar(), ahora);
+                alertas.abrir(r.aAbrir());
+            }
+        }
+    }
+
+    private double umbralDe(Nivel nivel, UmbralAlerta u) {
+        return switch (nivel) {
+            case CRITICO -> u.entradaCritico();
+            case ALTO -> u.entradaAlto();
+            case ADVERTENCIA, NORMAL -> u.entradaAdvertencia();
+        };
     }
 
     /**

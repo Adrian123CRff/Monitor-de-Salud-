@@ -5,11 +5,14 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorArchivos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorMemoria;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioAlertas;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioIndices;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioTablespaces;
+import cr.ac.una.monitor.dominio.alertas.Alerta;
+import cr.ac.una.monitor.dominio.alertas.Nivel;
 import cr.ac.una.monitor.dominio.calibracion.Calibracion;
 import cr.ac.una.monitor.dominio.modelo.Componente;
 import cr.ac.una.monitor.dominio.modelo.DetalleTablespace;
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -122,6 +126,39 @@ class MuestrearInstanciaServicioTest {
         }
     };
 
+    private final Map<String, Alerta> alertasAbiertas = new HashMap<>();
+    private final List<Alerta> alertasAbiertasHistorial = new ArrayList<>();
+    private final RepositorioAlertas repositorioAlertasFalso = new RepositorioAlertas() {
+        private String clave(InstanciaId instancia, String variable, Optional<String> entidad) {
+            return instancia.valor() + "|" + variable + "|" + entidad.orElse("");
+        }
+
+        @Override
+        public Optional<Alerta> buscarAbierta(InstanciaId instancia, String variable, Optional<String> entidad) {
+            return Optional.ofNullable(alertasAbiertas.get(clave(instancia, variable, entidad)));
+        }
+
+        @Override
+        public Alerta abrir(Alerta nueva) {
+            Alerta conId = new Alerta(1L + alertasAbiertasHistorial.size(), nueva.instancia(), nueva.componente(),
+                nueva.variable(), nueva.entidad(), nueva.nivel(), nueva.valor(), nueva.umbral(),
+                nueva.descripcion(), nueva.abiertaEn(), nueva.cerradaEn());
+            alertasAbiertas.put(clave(nueva.instancia(), nueva.variable(), nueva.entidad()), conId);
+            alertasAbiertasHistorial.add(conId);
+            return conId;
+        }
+
+        @Override
+        public void cerrar(Alerta existente, Instant cerradaEn) {
+            alertasAbiertas.remove(clave(existente.instancia(), existente.variable(), existente.entidad()));
+        }
+
+        @Override
+        public List<Alerta> abiertas(InstanciaId instancia) {
+            return List.copyOf(alertasAbiertas.values());
+        }
+    };
+
     private final RepositorioCalibracion calibracionFalsa = new RepositorioCalibracion() {
         @Override
         public Calibracion vigente() {
@@ -160,7 +197,7 @@ class MuestrearInstanciaServicioTest {
         ), false);
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
-            archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
+            archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso,
             calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
@@ -191,7 +228,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosCriticos, FONDO_CRITICO,
             memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -246,7 +283,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaConPresionDePga, archivosSanos, repositorioConHistorial, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -309,7 +346,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, fondoConEsperas,
             memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioFondoConHistorial,
-            repositorioTablespacesFalso, repositorioIndicesFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -340,7 +377,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaCaida, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -385,7 +422,7 @@ class MuestrearInstanciaServicioTest {
         };
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
-            archivosConDetalle, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
+            archivosConDetalle, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso,
             calibracionFalsa);
 
         servicio.ejecutar(INSTANCIA);
@@ -393,5 +430,84 @@ class MuestrearInstanciaServicioTest {
         assertThat(tablespacesGuardados).hasSize(2);
         assertThat(tablespacesGuardados).extracting(DetalleTablespace::nombre)
             .containsExactlyInAnyOrder("SYSTEM", "USERS");
+    }
+
+    private RecolectorArchivos archivosConTablespace(double datafilesOffline, double usedPercentUsers) {
+        return new RecolectorArchivos() {
+            @Override
+            public Muestra recolectar(InstanciaId instancia) {
+                return new Muestra(Componente.ARCHIVOS, Instant.now(), Map.of(
+                    "peor_tablespace_pct", usedPercentUsers, "a2_datafiles_offline", datafilesOffline,
+                    "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
+                ), false);
+            }
+
+            @Override
+            public List<DetalleTablespace> recolectarTablespaces(InstanciaId instancia) {
+                return List.of(new DetalleTablespace("USERS", usedPercentUsers, 100.0, 1000.0));
+            }
+        };
+    }
+
+    @Test
+    void un_datafile_offline_abre_una_alerta_critica_de_inmediato() {
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+        RecolectorMemoria memoriaSana = instancia -> new Muestra(Componente.MEMORIA, Instant.now(), Map.of(
+            "pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0
+        ), false);
+
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
+            archivosConTablespace(1.0, 10.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+
+        servicio.ejecutar(INSTANCIA);
+
+        List<Alerta> abiertas = repositorioAlertasFalso.abiertas(INSTANCIA);
+        assertThat(abiertas).anySatisfy(a -> {
+            assertThat(a.variable()).isEqualTo("a2_datafiles_offline");
+            assertThat(a.nivel()).isEqualTo(Nivel.CRITICO);
+            assertThat(a.entidad()).isEmpty();
+        });
+    }
+
+    @Test
+    void un_tablespace_que_sube_y_luego_baja_abre_y_cierra_la_alerta_con_histeresis() {
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+        RecolectorMemoria memoriaSana = instancia -> new Muestra(Componente.MEMORIA, Instant.now(), Map.of(
+            "pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0
+        ), false);
+
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
+            archivosConTablespace(0.0, 80.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+        servicio.ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .anySatisfy(a -> assertThat(a.variable()).isEqualTo("peor_tablespace_pct"));
+
+        // Baja a 72%: por debajo de la entrada (75) pero todavía por encima de la
+        // salida (70) -- con histéresis, sigue abierta (no debería cerrar todavía).
+        MuestrearInstanciaServicio servicioZonaMuerta = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
+            memoriaSana, archivosConTablespace(0.0, 72.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+        servicioZonaMuerta.ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .anySatisfy(a -> assertThat(a.variable()).isEqualTo("peor_tablespace_pct"));
+
+        // Baja de la salida (70): ahora sí cierra.
+        MuestrearInstanciaServicio servicioNormal = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
+            memoriaSana, archivosConTablespace(0.0, 50.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+        servicioNormal.ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .noneMatch(a -> a.variable().equals("peor_tablespace_pct"));
     }
 }
