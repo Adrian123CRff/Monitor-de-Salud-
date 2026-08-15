@@ -23,9 +23,13 @@ import java.util.Map;
  * Oracle 23ai Free real: los nombres de proceso son DBW0 (no "DBWR"),
  * LGWR, CKPT, PMON, SMON.
  *
- * b2/b3 usan AVERAGE_WAIT de V$SYSTEM_EVENT, que Oracle reporta en
- * centésimas de segundo (no milisegundos) -- de ahí los umbrales
- * ok=1/critico=10 en UmbralesIniciales (10ms / 100ms).
+ * b2/b3/b4 ya NO usan AVERAGE_WAIT/TOTAL_WAITS directamente -- esos son
+ * acumulados desde el arranque de la instancia, el mismo problema que
+ * m9_cache_hit_pct en memoria (ver JdbcRecolectorMemoria). Este
+ * recolector trae TIME_WAITED y TOTAL_WAITS crudos (contadores reales,
+ * verificado contra Oracle: TIME_WAITED/TOTAL_WAITS ≈ AVERAGE_WAIT, así
+ * que la relación es consistente); MuestrearInstanciaServicio calcula la
+ * delta contra la última muestra guardada, igual que con memoria.
  *
  * Solo cubre un DBWR (DBW0); instancias con múltiples DBWR (DBW1, DBW2...)
  * quedan fuera de esta V1.
@@ -35,18 +39,22 @@ public class JdbcRecolectorProcesosFondo implements RecolectorProcesosFondo {
 
     private static final String SQL = """
         SELECT
-            bg.procesos_caidos          AS b1,
-            NVL(ev.lgwr_espera_avg, 0)  AS b2,
-            NVL(ev.dbwr_espera_avg, 0)  AS b3,
-            NVL(ev.ckpt_switch_incompleto, 0) AS b4
+            bg.procesos_caidos AS b1,
+            NVL(ev.lgwr_time_waited, 0) AS lgwr_tw,
+            NVL(ev.lgwr_total_waits, 0) AS lgwr_n,
+            NVL(ev.dbwr_time_waited, 0) AS dbwr_tw,
+            NVL(ev.dbwr_total_waits, 0) AS dbwr_n,
+            NVL(ev.ckpt_switch_incompleto, 0) AS ckpt_n
         FROM
             ( SELECT COUNT(CASE WHEN paddr = '00' THEN 1 END) AS procesos_caidos
               FROM v$bgprocess
               WHERE name IN ('DBW0','LGWR','CKPT','PMON','SMON')
             ) bg,
             ( SELECT
-                MAX(CASE WHEN event = 'log file sync' THEN average_wait END)            AS lgwr_espera_avg,
-                MAX(CASE WHEN event = 'db file async I/O submit' THEN average_wait END) AS dbwr_espera_avg,
+                MAX(CASE WHEN event = 'log file sync' THEN time_waited END) AS lgwr_time_waited,
+                MAX(CASE WHEN event = 'log file sync' THEN total_waits  END) AS lgwr_total_waits,
+                MAX(CASE WHEN event = 'db file async I/O submit' THEN time_waited END) AS dbwr_time_waited,
+                MAX(CASE WHEN event = 'db file async I/O submit' THEN total_waits  END) AS dbwr_total_waits,
                 MAX(CASE WHEN event = 'log file switch (checkpoint incomplete)' THEN total_waits END)
                     AS ckpt_switch_incompleto
               FROM v$system_event
@@ -71,9 +79,11 @@ public class JdbcRecolectorProcesosFondo implements RecolectorProcesosFondo {
     private Muestra mapear(ResultSet rs, int rowNum) throws SQLException {
         Map<String, Double> valores = new HashMap<>();
         valores.put("b1_procesos_caidos", rs.getDouble("b1"));
-        valores.put("b2_lgwr_espera_avg", rs.getDouble("b2"));
-        valores.put("b3_dbwr_espera_avg", rs.getDouble("b3"));
-        valores.put("b4_ckpt_switch_incompleto", rs.getDouble("b4"));
+        valores.put("b2_lgwr_time_waited_acum", rs.getDouble("lgwr_tw"));
+        valores.put("b2_lgwr_total_waits_acum", rs.getDouble("lgwr_n"));
+        valores.put("b3_dbwr_time_waited_acum", rs.getDouble("dbwr_tw"));
+        valores.put("b3_dbwr_total_waits_acum", rs.getDouble("dbwr_n"));
+        valores.put("b4_ckpt_switch_incompleto_acum", rs.getDouble("ckpt_n"));
 
         return new Muestra(Componente.PROCESOS, Instant.now(), valores, false);
     }

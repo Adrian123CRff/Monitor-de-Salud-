@@ -53,11 +53,14 @@ public final class UmbralesIniciales {
      * más severa -- si un proceso mandatorio no está activo, no hay grado
      * intermedio, por eso pesa más que las demás dentro del componente.
      *
-     * b2/b3 son promedios acumulados desde el arranque de la instancia
-     * (AVERAGE_WAIT de V$SYSTEM_EVENT, en centésimas de segundo) -- mismo
-     * problema que m9_cache_hit_pct: se vuelven menos sensibles con el
-     * tiempo. Documentado, no oculto; normalizar sobre la delta es trabajo
-     * futuro, igual que con memoria.
+     * b2/b3 ya NO son AVERAGE_WAIT acumulado desde el arranque (mismo
+     * problema que tenía m9_cache_hit_pct en memoria): MuestrearInstanciaServicio
+     * las calcula como delta(time_waited)/delta(total_waits) del intervalo
+     * contra la última muestra de fondo guardada (CalculadorDelta), y b4
+     * pasa de acumulado a delta del intervalo. Los umbrales (ok=1,
+     * critico=10, en centésimas de segundo) no cambian: el promedio del
+     * intervalo está en la misma unidad y magnitud que el AVERAGE_WAIT que
+     * reemplaza, verificado contra una instancia Oracle viva.
      */
     public static List<Umbral> procesosFondo() {
         return List.of(

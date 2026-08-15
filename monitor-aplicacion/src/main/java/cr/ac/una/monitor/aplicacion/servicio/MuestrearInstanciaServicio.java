@@ -7,6 +7,7 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesos;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
 import cr.ac.una.monitor.dominio.agregacion.CalculadorComponente;
 import cr.ac.una.monitor.dominio.agregacion.CalculadorDelta;
 import cr.ac.una.monitor.dominio.agregacion.CombinadorSubIndicadores;
@@ -38,13 +39,20 @@ import java.util.Optional;
  * guardar la nueva -- esta orquestación con histórico es justo lo que un
  * recolector (que solo lee el estado crudo actual) no debe hacer.
  *
+ * Fondo: b2_lgwr_espera_avg/b3_dbwr_espera_avg/b4_ckpt_switch_incompleto
+ * tenían el mismo problema que memoria (AVERAGE_WAIT/TOTAL_WAITS de
+ * V$SYSTEM_EVENT son acumulados desde el arranque, no delta-ables
+ * directamente) -- se corrige igual: el recolector trae los contadores
+ * crudos (TIME_WAITED/TOTAL_WAITS/switch count) y aquí se calcula la delta
+ * del intervalo contra RepositorioMuestrasFondo (tabla propia, ver esa
+ * interfaz, porque Componente.PROCESOS es ambiguo entre usuarios y fondo).
+ *
  * PENDIENTE (deliberado, para no fingir robustez que no existe todavía):
  * no hay manejo de fallo por componente ("recolectarSeguro" de la skill de
  * arquitectura) -- si un recolector lanza RecoleccionFallidaException, todo
  * el muestreo falla en vez de marcar ese componente como DESCONOCIDO y
  * seguir con los otros dos. Es lo próximo que hay que endurecer antes de
- * dejarlo corriendo con el planificador automático. Tampoco se persiste
- * todavía la muestra de procesos de fondo (no hay tabla para ella).
+ * dejarlo corriendo con el planificador automático.
  */
 @Service
 public class MuestrearInstanciaServicio implements MuestrearInstancia {
@@ -54,6 +62,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     private final RecolectorMemoria memoria;
     private final RecolectorArchivos archivos;
     private final RepositorioMuestras muestras;
+    private final RepositorioMuestrasFondo muestrasFondo;
     private final RepositorioCalibracion calibraciones;
     private final CalculadorComponente calculador = new CalculadorComponente();
     private final CombinadorSubIndicadores combinador = new CombinadorSubIndicadores();
@@ -61,12 +70,14 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
 
     public MuestrearInstanciaServicio(RecolectorProcesos procesosUsuarios, RecolectorProcesosFondo procesosFondo,
             RecolectorMemoria memoria, RecolectorArchivos archivos,
-            RepositorioMuestras muestras, RepositorioCalibracion calibraciones) {
+            RepositorioMuestras muestras, RepositorioMuestrasFondo muestrasFondo,
+            RepositorioCalibracion calibraciones) {
         this.procesosUsuarios = procesosUsuarios;
         this.procesosFondo = procesosFondo;
         this.memoria = memoria;
         this.archivos = archivos;
         this.muestras = muestras;
+        this.muestrasFondo = muestrasFondo;
         this.calibraciones = calibraciones;
     }
 
@@ -75,14 +86,15 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         Calibracion calibracionVigente = calibracionVigenteOInicial();
 
         Muestra muestraUsuarios = procesosUsuarios.recolectar(instancia);
-        Muestra muestraFondo = procesosFondo.recolectar(instancia);
+        Muestra muestraFondoCruda = procesosFondo.recolectar(instancia);
         Muestra muestraMemoriaCruda = memoria.recolectar(instancia);
         Muestra muestraArchivos = archivos.recolectar(instancia);
 
+        Muestra muestraFondo = conDeltasFondo(instancia, muestraFondoCruda);
         Muestra muestraMemoria = conDeltas(instancia, muestraMemoriaCruda);
 
         muestras.guardar(instancia, muestraUsuarios);
-        // muestraFondo: pendiente, no hay tabla MONITOR_PROCESOS_FONDO todavía.
+        muestrasFondo.guardar(instancia, muestraFondo);
         muestras.guardar(instancia, muestraMemoria);
         muestras.guardar(instancia, muestraArchivos);
 
@@ -122,6 +134,49 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
 
         boolean reiniciada = deltaOverAlloc.reinicioDetectado() || deltaMultipass.reinicioDetectado();
         return new Muestra(Componente.MEMORIA, cruda.momento(), valores, reiniciada);
+    }
+
+    /**
+     * Añade b2_lgwr_espera_avg/b3_dbwr_espera_avg/b4_ckpt_switch_incompleto
+     * comparando contra la última muestra de fondo guardada. b2/b3 se
+     * calculan como delta(time_waited)/delta(total_waits) del intervalo --
+     * si no hubo esperas nuevas (delta(total_waits) == 0) se deja sin
+     * puntuar en vez de dividir entre cero, igual que sin historial.
+     * b1_procesos_caidos es instantáneo (no acumulado), pasa tal cual.
+     */
+    private Muestra conDeltasFondo(InstanciaId instancia, Muestra cruda) {
+        Optional<Muestra> ultima = muestrasFondo.ultima(instancia);
+
+        CalculadorDelta.Resultado deltaLgwrTw = CalculadorDelta.calcular(
+            cruda.valor("b2_lgwr_time_waited_acum"),
+            ultima.map(m -> m.valores().get("b2_lgwr_time_waited_acum")));
+        CalculadorDelta.Resultado deltaLgwrN = CalculadorDelta.calcular(
+            cruda.valor("b2_lgwr_total_waits_acum"),
+            ultima.map(m -> m.valores().get("b2_lgwr_total_waits_acum")));
+        CalculadorDelta.Resultado deltaDbwrTw = CalculadorDelta.calcular(
+            cruda.valor("b3_dbwr_time_waited_acum"),
+            ultima.map(m -> m.valores().get("b3_dbwr_time_waited_acum")));
+        CalculadorDelta.Resultado deltaDbwrN = CalculadorDelta.calcular(
+            cruda.valor("b3_dbwr_total_waits_acum"),
+            ultima.map(m -> m.valores().get("b3_dbwr_total_waits_acum")));
+        CalculadorDelta.Resultado deltaCkpt = CalculadorDelta.calcular(
+            cruda.valor("b4_ckpt_switch_incompleto_acum"),
+            ultima.map(m -> m.valores().get("b4_ckpt_switch_incompleto_acum")));
+
+        Map<String, Double> valores = new HashMap<>(cruda.valores());
+
+        if (deltaLgwrTw.delta().isPresent() && deltaLgwrN.delta().isPresent() && deltaLgwrN.delta().get() > 0) {
+            valores.put("b2_lgwr_espera_avg", deltaLgwrTw.delta().get() / deltaLgwrN.delta().get());
+        }
+        if (deltaDbwrTw.delta().isPresent() && deltaDbwrN.delta().isPresent() && deltaDbwrN.delta().get() > 0) {
+            valores.put("b3_dbwr_espera_avg", deltaDbwrTw.delta().get() / deltaDbwrN.delta().get());
+        }
+        deltaCkpt.delta().ifPresent(d -> valores.put("b4_ckpt_switch_incompleto", d));
+
+        boolean reiniciada = deltaLgwrTw.reinicioDetectado() || deltaLgwrN.reinicioDetectado()
+            || deltaDbwrTw.reinicioDetectado() || deltaDbwrN.reinicioDetectado() || deltaCkpt.reinicioDetectado();
+
+        return new Muestra(Componente.PROCESOS, cruda.momento(), valores, reiniciada);
     }
 
     private Calibracion calibracionVigenteOInicial() {

@@ -36,7 +36,10 @@ class JdbcRecolectorProcesosFondoIT {
         Muestra muestra = recolector.recolectar(new InstanciaId(1L));
 
         assertThat(muestra.valores()).containsKeys(
-            "b1_procesos_caidos", "b2_lgwr_espera_avg", "b3_dbwr_espera_avg", "b4_ckpt_switch_incompleto");
+            "b1_procesos_caidos",
+            "b2_lgwr_time_waited_acum", "b2_lgwr_total_waits_acum",
+            "b3_dbwr_time_waited_acum", "b3_dbwr_total_waits_acum",
+            "b4_ckpt_switch_incompleto_acum");
         // DBW0, LGWR, CKPT, PMON y SMON deben estar activos en una instancia sana recién levantada.
         assertThat(muestra.valores().get("b1_procesos_caidos")).isEqualTo(0.0);
     }
