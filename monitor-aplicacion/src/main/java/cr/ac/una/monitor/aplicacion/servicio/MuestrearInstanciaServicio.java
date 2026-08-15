@@ -8,6 +8,7 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.dominio.agregacion.CalculadorComponente;
+import cr.ac.una.monitor.dominio.agregacion.CalculadorDelta;
 import cr.ac.una.monitor.dominio.agregacion.CombinadorSubIndicadores;
 import cr.ac.una.monitor.dominio.agregacion.MotorIndicadores;
 import cr.ac.una.monitor.dominio.calibracion.Calibracion;
@@ -20,7 +21,9 @@ import cr.ac.una.monitor.dominio.modelo.Muestra;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Caso de uso central: recolecta procesos (usuarios + fondo)/memoria/archivos
@@ -29,6 +32,11 @@ import java.util.Map;
  * IP ya no es un único indicador plano: se calcula IP_usuarios (V$SESSION) e
  * IP_fondo (DBW0/LGWR/CKPT/PMON/SMON, ver ADR 0006) por separado y se
  * combinan con CombinadorSubIndicadores.
+ *
+ * Memoria: m8_over_alloc_delta y m10_multipass_delta se calculan aquí
+ * (CalculadorDelta), consultando la última muestra guardada ANTES de
+ * guardar la nueva -- esta orquestación con histórico es justo lo que un
+ * recolector (que solo lee el estado crudo actual) no debe hacer.
  *
  * PENDIENTE (deliberado, para no fingir robustez que no existe todavía):
  * no hay manejo de fallo por componente ("recolectarSeguro" de la skill de
@@ -68,8 +76,10 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
 
         Muestra muestraUsuarios = procesosUsuarios.recolectar(instancia);
         Muestra muestraFondo = procesosFondo.recolectar(instancia);
-        Muestra muestraMemoria = memoria.recolectar(instancia);
+        Muestra muestraMemoriaCruda = memoria.recolectar(instancia);
         Muestra muestraArchivos = archivos.recolectar(instancia);
+
+        Muestra muestraMemoria = conDeltas(instancia, muestraMemoriaCruda);
 
         muestras.guardar(instancia, muestraUsuarios);
         // muestraFondo: pendiente, no hay tabla MONITOR_PROCESOS_FONDO todavía.
@@ -88,6 +98,30 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         Indicador ia = calculador.calcular(muestraArchivos, Componente.ARCHIVOS, UmbralesIniciales.archivos());
 
         return motor.calcular(Instant.now(), ip, im, ia, calibracionVigente);
+    }
+
+    /**
+     * Añade m8_over_alloc_delta y m10_multipass_delta comparando contra la
+     * última muestra de memoria guardada. Sin historial previo (primera
+     * muestra de la instancia), las deltas quedan ausentes -- CalculadorComponente
+     * reparte el peso entre pga_uso_pct únicamente, no revienta.
+     */
+    private Muestra conDeltas(InstanciaId instancia, Muestra cruda) {
+        Optional<Muestra> ultima = muestras.ultima(instancia, Componente.MEMORIA);
+
+        CalculadorDelta.Resultado deltaOverAlloc = CalculadorDelta.calcular(
+            cruda.valor("m8_over_alloc_acum"),
+            ultima.map(m -> m.valores().get("m8_over_alloc_acum")));
+        CalculadorDelta.Resultado deltaMultipass = CalculadorDelta.calcular(
+            cruda.valor("m10_multipass_acum"),
+            ultima.map(m -> m.valores().get("m10_multipass_acum")));
+
+        Map<String, Double> valores = new HashMap<>(cruda.valores());
+        deltaOverAlloc.delta().ifPresent(d -> valores.put("m8_over_alloc_delta", d));
+        deltaMultipass.delta().ifPresent(d -> valores.put("m10_multipass_delta", d));
+
+        boolean reiniciada = deltaOverAlloc.reinicioDetectado() || deltaMultipass.reinicioDetectado();
+        return new Muestra(Componente.MEMORIA, cruda.momento(), valores, reiniciada);
     }
 
     private Calibracion calibracionVigenteOInicial() {

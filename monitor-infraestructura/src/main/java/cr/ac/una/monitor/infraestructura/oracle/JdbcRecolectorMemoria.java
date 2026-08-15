@@ -18,18 +18,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Lee m1..m9 de V$SGAINFO / V$SGASTAT / V$PGASTAT (SQL de la skill
+ * Lee m1..m9 de V$SGAINFO / V$SGASTAT / V$PGASTAT, más
+ * V$SQL_WORKAREA_HISTOGRAM (SQL de la skill
  * oracle-vistas-dinamicas/references/sql-memoria.md).
  *
- * PENDIENTE (deliberado): NO calcula "over_alloc_delta" -- eso requiere
- * comparar m8 con la última muestra guardada (y detectar reinicio via
- * startup_time), lo cual necesita RepositorioMuestras.ultima(...), que
- * este recolector no tiene ni debería tener (su responsabilidad es leer
- * el estado crudo actual, no la orquestación histórica). Esa comparación
- * pertenece a MuestrearInstanciaServicio o a un servicio de dominio nuevo.
- * Mientras tanto, CalculadorComponente simplemente ignora la variable
- * ausente y reparte el peso entre las que sí llegan (pga_uso_pct,
- * cache_hit_pct_delta) -- señal reducida, no un crash.
+ * m9_cache_hit_pct se guarda como dato crudo/contexto pero NO se usa para
+ * puntuar: es un promedio acumulado desde el arranque, no un contador, y no
+ * se le puede sacar una delta real (ver UmbralesIniciales.memoria()).
+ * m10_multipass_acum sí es un contador real -- verificado contra una
+ * instancia Oracle viva antes de usarlo.
+ *
+ * Este recolector SOLO lee el estado crudo actual. Calcular las deltas
+ * (m8_over_alloc_delta, m10_multipass_delta) requiere la última muestra
+ * guardada y es responsabilidad de MuestrearInstanciaServicio, no de este
+ * adaptador -- su trabajo es leer, no orquestar histórico.
  */
 @Component
 public class JdbcRecolectorMemoria implements RecolectorMemoria {
@@ -45,7 +47,8 @@ public class JdbcRecolectorMemoria implements RecolectorMemoria {
             pga.pga_maxima          AS m7,
             pga.over_alloc_acum     AS m8,
             pga.cache_hit_pct       AS m9,
-            pga.pga_target          AS pga_target_bytes
+            pga.pga_target          AS pga_target_bytes,
+            wa.multipass_acum       AS m10
         FROM
             ( SELECT
                 MAX(CASE WHEN name = 'Maximum SGA Size'          THEN bytes END) AS sga_total_bytes,
@@ -65,7 +68,10 @@ public class JdbcRecolectorMemoria implements RecolectorMemoria {
                 MAX(CASE WHEN name = 'cache hit percentage'          THEN value END) AS cache_hit_pct,
                 MAX(CASE WHEN name = 'aggregate PGA target parameter' THEN value END) AS pga_target
               FROM v$pgastat
-            ) pga
+            ) pga,
+            ( SELECT NVL(SUM(multipasses_executions), 0) AS multipass_acum
+              FROM v$sql_workarea_histogram
+            ) wa
         """;
 
     private final JdbcClient jdbc;
@@ -87,7 +93,6 @@ public class JdbcRecolectorMemoria implements RecolectorMemoria {
         Map<String, Double> valores = new HashMap<>();
         double pgaAsignada = rs.getDouble("m5");
         Double pgaTarget = valorONulo(rs, "pga_target_bytes");
-        double cacheHitAcumulado = rs.getDouble("m9"); // acumulado; ver nota de clase arriba
 
         valores.put("m1_sga_total_bytes", rs.getDouble("m1"));
         valores.put("m2_sga_libre_bytes", rs.getDouble("m2"));
@@ -97,7 +102,8 @@ public class JdbcRecolectorMemoria implements RecolectorMemoria {
         valores.put("m6_pga_en_uso_bytes", rs.getDouble("m6"));
         valores.put("m7_pga_maxima_bytes", rs.getDouble("m7"));
         valores.put("m8_over_alloc_acum", rs.getDouble("m8"));
-        valores.put("m9_cache_hit_pct", cacheHitAcumulado); // nombre de columna en el esquema; ver nota arriba: es acumulado
+        valores.put("m9_cache_hit_pct", rs.getDouble("m9")); // crudo/contexto, no se puntúa
+        valores.put("m10_multipass_acum", rs.getDouble("m10"));
         if (pgaTarget != null) {
             valores.put("pga_target_bytes", pgaTarget);
         }
@@ -106,10 +112,6 @@ public class JdbcRecolectorMemoria implements RecolectorMemoria {
         if (pgaTarget != null && pgaTarget > 0) {
             valores.put("pga_uso_pct", pgaAsignada / pgaTarget * 100);
         }
-        // cache_hit_pct_delta: hasta que exista el cálculo de delta (ver nota de la
-        // clase), usamos el acumulado tal cual -- es una aproximación deliberadamente
-        // imprecisa en instancias con uptime largo (ver skill), documentada, no oculta.
-        valores.put("cache_hit_pct_delta", cacheHitAcumulado);
 
         return new Muestra(Componente.MEMORIA, Instant.now(), valores, false);
     }

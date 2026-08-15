@@ -15,6 +15,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +54,8 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
         Componente.MEMORIA, Set.of(
             "m1_sga_total_bytes", "m2_sga_libre_bytes", "m3_shared_pool_bytes",
             "m4_buffer_cache_bytes", "m5_pga_asignada_bytes", "m6_pga_en_uso_bytes",
-            "m7_pga_maxima_bytes", "m8_over_alloc_acum", "m9_cache_hit_pct", "pga_target_bytes"),
+            "m7_pga_maxima_bytes", "m8_over_alloc_acum", "m8_over_alloc_delta",
+            "m9_cache_hit_pct", "m10_multipass_acum", "m10_multipass_delta", "pga_target_bytes"),
         Componente.ARCHIVOS, Set.of(
             "a1_datafiles_online", "a2_datafiles_offline", "a3_datafiles_bytes",
             "a4_peor_tablespace_pct", "a4_tablespaces_riesgo",
@@ -74,8 +76,17 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
         List<String> columnas = muestra.valores().keySet().stream()
             .filter(permitidas::contains)
             .toList();
-        String columnasSql = String.join(", ", columnas);
-        String placeholders = columnas.stream().map(c -> ":" + c).collect(Collectors.joining(", "));
+
+        // instancia_reiniciada es un boolean del propio record Muestra, no
+        // vive en el mapa valores() -- solo la tabla de memoria tiene esta columna.
+        boolean incluyeReiniciada = muestra.componente() == Componente.MEMORIA;
+        List<String> todasColumnas = new ArrayList<>(columnas);
+        if (incluyeReiniciada) {
+            todasColumnas.add("instancia_reiniciada");
+        }
+
+        String columnasSql = String.join(", ", todasColumnas);
+        String placeholders = todasColumnas.stream().map(c -> ":" + c).collect(Collectors.joining(", "));
 
         var spec = jdbc.sql("INSERT INTO " + tabla + " (instancia_id, muestreado_en, " + columnasSql + ") "
                 + "VALUES (:instancia_id, :muestreado_en, " + placeholders + ")")
@@ -83,6 +94,9 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
             .param("muestreado_en", OffsetDateTime.ofInstant(muestra.momento(), ZoneOffset.UTC));
         for (String columna : columnas) {
             spec = spec.param(columna, muestra.valores().get(columna));
+        }
+        if (incluyeReiniciada) {
+            spec = spec.param("instancia_reiniciada", muestra.instanciaReiniciada());
         }
         spec.update();
     }
@@ -107,6 +121,7 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
         Map<String, Double> valores = new HashMap<>();
         ResultSetMetaData meta = rs.getMetaData();
         Instant momento = null;
+        boolean reiniciada = false;
 
         for (int i = 1; i <= meta.getColumnCount(); i++) {
             String columna = meta.getColumnLabel(i).toLowerCase();
@@ -114,7 +129,11 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
                 momento = rs.getObject(i, OffsetDateTime.class).toInstant();
                 continue;
             }
-            if (COLUMNAS_NO_VARIABLES.contains(columna) || columna.equals("instancia_reiniciada")) {
+            if (columna.equals("instancia_reiniciada")) {
+                reiniciada = rs.getBoolean(i);
+                continue;
+            }
+            if (COLUMNAS_NO_VARIABLES.contains(columna)) {
                 continue;
             }
             double valor = rs.getDouble(i);
@@ -122,7 +141,7 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
                 valores.put(columna, valor);
             }
         }
-        return new Muestra(componente, momento, valores, false);
+        return new Muestra(componente, momento, valores, reiniciada);
     }
 
     private String tabla(Componente componente) {

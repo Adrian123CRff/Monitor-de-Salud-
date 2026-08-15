@@ -67,11 +67,24 @@ public final class UmbralesIniciales {
             Umbral.penalizacion("b4_ckpt_switch_incompleto", 20, 0.15));
     }
 
+    /**
+     * m9_cache_hit_pct NO se puntúa: es un promedio acumulado desde el
+     * arranque (no un contador), así que no se le puede sacar una delta
+     * real -- la skill oracle-vistas-dinamicas lo advierte explícitamente
+     * y sugiere la alternativa que se usa aquí: V$SQL_WORKAREA_HISTOGRAM,
+     * que sí es un contador real, verificado contra una instancia Oracle
+     * viva antes de usarlo (SUM(multipasses_executions), 0 en una instancia
+     * sana e inactiva, como se esperaba).
+     *
+     * m8_over_alloc_delta y m10_multipass_delta se calculan en
+     * MuestrearInstanciaServicio con CalculadorDelta, comparando contra la
+     * última muestra guardada -- no son un passthrough del acumulado.
+     */
     public static List<Umbral> memoria() {
         return List.of(
             Umbral.lineal("pga_uso_pct", LINEAL_INVERTIDA, 90, 130, 0.4),
-            Umbral.penalizacion("over_alloc_delta", 20, 0.3),
-            Umbral.lineal("cache_hit_pct_delta", LINEAL_DIRECTA, 90, 50, 0.3));
+            Umbral.penalizacion("m8_over_alloc_delta", 20, 0.3),
+            Umbral.penalizacion("m10_multipass_delta", 10, 0.3));
     }
 
     public static List<Umbral> archivos() {
