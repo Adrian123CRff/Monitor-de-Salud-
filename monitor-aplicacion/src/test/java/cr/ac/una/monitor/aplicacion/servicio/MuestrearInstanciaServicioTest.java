@@ -8,8 +8,10 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioTablespaces;
 import cr.ac.una.monitor.dominio.calibracion.Calibracion;
 import cr.ac.una.monitor.dominio.modelo.Componente;
+import cr.ac.una.monitor.dominio.modelo.DetalleTablespace;
 import cr.ac.una.monitor.dominio.modelo.InstanciaId;
 import cr.ac.una.monitor.dominio.modelo.Isbd;
 import cr.ac.una.monitor.dominio.modelo.Estado;
@@ -87,6 +89,10 @@ class MuestrearInstanciaServicioTest {
         }
     };
 
+    private final List<DetalleTablespace> tablespacesGuardados = new ArrayList<>();
+    private final RepositorioTablespaces repositorioTablespacesFalso =
+        (instancia, momento, detalle) -> tablespacesGuardados.addAll(detalle);
+
     private final RepositorioCalibracion calibracionFalsa = new RepositorioCalibracion() {
         @Override
         public Calibracion vigente() {
@@ -125,7 +131,8 @@ class MuestrearInstanciaServicioTest {
         ), false);
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
-            archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, calibracionFalsa);
+            archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -154,7 +161,8 @@ class MuestrearInstanciaServicioTest {
         ), false);
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosCriticos, FONDO_CRITICO,
-            memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, calibracionFalsa);
+            memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -209,7 +217,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaConPresionDePga, archivosSanos, repositorioConHistorial, repositorioMuestrasFondoFalso,
-            calibracionFalsa);
+            repositorioTablespacesFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -271,7 +279,8 @@ class MuestrearInstanciaServicioTest {
         ), false);
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, fondoConEsperas,
-            memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioFondoConHistorial, calibracionFalsa);
+            memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioFondoConHistorial,
+            repositorioTablespacesFalso, calibracionFalsa);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -301,7 +310,8 @@ class MuestrearInstanciaServicioTest {
         ), false);
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
-            memoriaCaida, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, calibracionFalsa);
+            memoriaCaida, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, calibracionFalsa);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -315,5 +325,44 @@ class MuestrearInstanciaServicioTest {
         // solo se guardan procesos (usuarios), fondo y archivos: 3, no 4.
         assertThat(muestrasGuardadas).hasSize(3);
         assertThat(muestrasGuardadas).noneMatch(m -> m.componente() == Componente.MEMORIA);
+    }
+
+    @Test
+    void el_detalle_por_tablespace_se_recolecta_y_persiste_junto_con_el_agregado_de_archivos() {
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+
+        RecolectorMemoria memoriaSana = instancia -> new Muestra(Componente.MEMORIA, Instant.now(), Map.of(
+            "pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0
+        ), false);
+
+        RecolectorArchivos archivosConDetalle = new RecolectorArchivos() {
+            @Override
+            public Muestra recolectar(InstanciaId instancia) {
+                return new Muestra(Componente.ARCHIVOS, Instant.now(), Map.of(
+                    "peor_tablespace_pct", 40.0, "a2_datafiles_offline", 0.0,
+                    "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
+                ), false);
+            }
+
+            @Override
+            public List<DetalleTablespace> recolectarTablespaces(InstanciaId instancia) {
+                return List.of(
+                    new DetalleTablespace("SYSTEM", 40.0, 400.0, 1000.0),
+                    new DetalleTablespace("USERS", 10.0, 100.0, 1000.0));
+            }
+        };
+
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
+            archivosConDetalle, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            calibracionFalsa);
+
+        servicio.ejecutar(INSTANCIA);
+
+        assertThat(tablespacesGuardados).hasSize(2);
+        assertThat(tablespacesGuardados).extracting(DetalleTablespace::nombre)
+            .containsExactlyInAnyOrder("SYSTEM", "USERS");
     }
 }

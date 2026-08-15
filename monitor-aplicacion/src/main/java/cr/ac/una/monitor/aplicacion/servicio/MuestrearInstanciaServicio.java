@@ -9,6 +9,7 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorProcesosFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioCalibracion;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioTablespaces;
 import cr.ac.una.monitor.dominio.agregacion.CalculadorComponente;
 import cr.ac.una.monitor.dominio.agregacion.CalculadorDelta;
 import cr.ac.una.monitor.dominio.agregacion.CombinadorSubIndicadores;
@@ -61,6 +62,14 @@ import java.util.function.Supplier;
  * calcula igual con el sub-indicador que sí llegó (CombinadorSubIndicadores
  * ya redistribuye pesos entre lo que reciba); IP entero queda ausente solo
  * si fallan los dos.
+ *
+ * Detalle por tablespace (MONITOR_TABLESPACE): se recolecta y persiste solo
+ * si el agregado de archivos se pudo leer -- si Oracle no responde para el
+ * agregado, tampoco va a responder para el detalle, no vale la pena
+ * intentarlo dos veces. Es información complementaria para el dashboard,
+ * no entra en el cálculo del ISBD (CalculadorComponente ya usa el peor
+ * tablespace vía a4_peor_tablespace_pct); su propio fallo no debe tumbar
+ * el resto del ciclo, por eso también pasa por recolectarSeguro.
  */
 @Service
 public class MuestrearInstanciaServicio implements MuestrearInstancia {
@@ -73,6 +82,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     private final RecolectorArchivos archivos;
     private final RepositorioMuestras muestras;
     private final RepositorioMuestrasFondo muestrasFondo;
+    private final RepositorioTablespaces tablespaces;
     private final RepositorioCalibracion calibraciones;
     private final CalculadorComponente calculador = new CalculadorComponente();
     private final CombinadorSubIndicadores combinador = new CombinadorSubIndicadores();
@@ -81,13 +91,14 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     public MuestrearInstanciaServicio(RecolectorProcesos procesosUsuarios, RecolectorProcesosFondo procesosFondo,
             RecolectorMemoria memoria, RecolectorArchivos archivos,
             RepositorioMuestras muestras, RepositorioMuestrasFondo muestrasFondo,
-            RepositorioCalibracion calibraciones) {
+            RepositorioTablespaces tablespaces, RepositorioCalibracion calibraciones) {
         this.procesosUsuarios = procesosUsuarios;
         this.procesosFondo = procesosFondo;
         this.memoria = memoria;
         this.archivos = archivos;
         this.muestras = muestras;
         this.muestrasFondo = muestrasFondo;
+        this.tablespaces = tablespaces;
         this.calibraciones = calibraciones;
     }
 
@@ -106,7 +117,11 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         muestraUsuarios.ifPresent(m -> muestras.guardar(instancia, m));
         muestraFondo.ifPresent(m -> muestrasFondo.guardar(instancia, m));
         muestraMemoria.ifPresent(m -> muestras.guardar(instancia, m));
-        muestraArchivos.ifPresent(m -> muestras.guardar(instancia, m));
+        muestraArchivos.ifPresent(m -> {
+            muestras.guardar(instancia, m);
+            recolectarSeguro("tablespaces", () -> archivos.recolectarTablespaces(instancia))
+                .ifPresent(detalle -> tablespaces.guardar(instancia, m.momento(), detalle));
+        });
 
         Optional<Indicador> ipUsuarios = muestraUsuarios.map(
             m -> calculador.calcular(m, Componente.PROCESOS, UmbralesIniciales.procesosUsuarios()));
@@ -150,7 +165,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
      * el ciclo entero: se registra y ese componente queda Optional.empty() para
      * este muestreo (ver javadoc de la clase).
      */
-    private Optional<Muestra> recolectarSeguro(String etiqueta, Supplier<Muestra> recoleccion) {
+    private <T> Optional<T> recolectarSeguro(String etiqueta, Supplier<T> recoleccion) {
         try {
             return Optional.of(recoleccion.get());
         } catch (RecoleccionFallidaException e) {

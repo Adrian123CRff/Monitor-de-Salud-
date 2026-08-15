@@ -3,6 +3,7 @@ package cr.ac.una.monitor.infraestructura.oracle;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecoleccionFallidaException;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RecolectorArchivos;
 import cr.ac.una.monitor.dominio.modelo.Componente;
+import cr.ac.una.monitor.dominio.modelo.DetalleTablespace;
 import cr.ac.una.monitor.dominio.modelo.InstanciaId;
 import cr.ac.una.monitor.dominio.modelo.Muestra;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -15,6 +16,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,10 +27,12 @@ import java.util.Map;
  * "redundancia_redo" (variable de UmbralesIniciales) = min miembros por
  * grupo de redo (a6_min_miembros): 1 miembro = sin copia.
  *
- * PENDIENTE: no guarda el detalle por tablespace en MONITOR_TABLESPACE
- * (a4_nombre solo se usa para el log de error, no se persiste todavía) --
- * eso vive en el repositorio, no en el recolector, y el repositorio real
- * aún no existe.
+ * recolectarTablespaces() trae el detalle fila por fila de
+ * DBA_TABLESPACE_USAGE_METRICS (para MONITOR_TABLESPACE) -- recolectar()
+ * solo trae el agregado (MAX/COUNT) que necesita CalculadorComponente.
+ * used_space/tablespace_size vienen en bloques; se multiplican por
+ * block_size para persistir bytes reales, verificado contra una instancia
+ * Oracle viva (BLOCK_SIZE existe en la vista, no hay que asumirlo).
  */
 @Component
 public class JdbcRecolectorArchivos implements RecolectorArchivos {
@@ -80,6 +84,15 @@ public class JdbcRecolectorArchivos implements RecolectorArchivos {
             ) lf
         """;
 
+    private static final String SQL_TABLESPACES = """
+        SELECT
+            tablespace_name,
+            used_percent,
+            used_space * block_size      AS used_bytes,
+            tablespace_size * block_size AS max_bytes
+        FROM dba_tablespace_usage_metrics
+        """;
+
     private final JdbcClient jdbc;
 
     public JdbcRecolectorArchivos(@Qualifier("oracleMonitoreado") DataSource ds) {
@@ -96,6 +109,23 @@ public class JdbcRecolectorArchivos implements RecolectorArchivos {
         } catch (DataAccessException e) {
             throw new RecoleccionFallidaException(Componente.ARCHIVOS, instancia, e);
         }
+    }
+
+    @Override
+    public List<DetalleTablespace> recolectarTablespaces(InstanciaId instancia) {
+        try {
+            return jdbc.sql(SQL_TABLESPACES).query(this::mapearTablespace).list();
+        } catch (DataAccessException e) {
+            throw new RecoleccionFallidaException(Componente.ARCHIVOS, instancia, e);
+        }
+    }
+
+    private DetalleTablespace mapearTablespace(ResultSet rs, int rowNum) throws SQLException {
+        return new DetalleTablespace(
+            rs.getString("tablespace_name"),
+            rs.getDouble("used_percent"),
+            rs.getDouble("used_bytes"),
+            rs.getDouble("max_bytes"));
     }
 
     private Muestra mapear(ResultSet rs, int rowNum) throws SQLException {
