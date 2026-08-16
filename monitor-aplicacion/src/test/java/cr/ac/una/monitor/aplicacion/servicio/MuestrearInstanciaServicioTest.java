@@ -668,6 +668,34 @@ class MuestrearInstanciaServicioTest {
     }
 
     @Test
+    void sesiones_bloqueadas_se_cierra_apenas_el_conteo_vuelve_a_cero() {
+        // Regresión del bug encontrado preparando una prueba de estrés en vivo:
+        // con salidaAdvertencia=0 y EvaluadorNivel usando < estricto, un valor de
+        // 0 nunca cumplía "valor < 0" y el episodio quedaba abierto para siempre.
+        // AlertasIniciales.sesionesBloqueadas() ahora usa entrada==salida==1 en
+        // ese tramo -- este test prueba el ciclo completo abrir -> despejar -> cerrar.
+        RepositorioMuestrasConHistorial repositorio = new RepositorioMuestrasConHistorial();
+        repositorio.sembrar(Componente.PROCESOS,
+            new Muestra(Componente.PROCESOS, Instant.now(), Map.of("p6_sesiones_bloqueadas", 2.0), false),
+            new Muestra(Componente.PROCESOS, Instant.now(), Map.of("p6_sesiones_bloqueadas", 0.0), false));
+
+        // Ciclo 1: confirma 2 de 3 y abre en ADVERTENCIA.
+        new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(2.0), FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS,
+            repositorio, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
+            repositorioAlertasFalso, calibracionFalsa).ejecutar(INSTANCIA);
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .anyMatch(a -> a.variable().equals("p6_sesiones_bloqueadas"));
+
+        // Ciclo 2: el bloqueo se libera, vuelve a 0.
+        new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0), FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS,
+            repositorio, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
+            repositorioAlertasFalso, calibracionFalsa).ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .noneMatch(a -> a.variable().equals("p6_sesiones_bloqueadas"));
+    }
+
+    @Test
     void presion_de_pga_dos_de_cinco_no_confirma_y_no_abre_alerta() {
         RepositorioMuestrasConHistorial repositorio = new RepositorioMuestrasConHistorial();
         // Historial (la más reciente primero): la [0] trae m8_over_alloc_acum

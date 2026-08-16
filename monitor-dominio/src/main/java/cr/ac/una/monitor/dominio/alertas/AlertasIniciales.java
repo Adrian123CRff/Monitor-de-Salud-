@@ -20,11 +20,14 @@ package cr.ac.una.monitor.dominio.alertas;
  *   alerta), consistencia deliberada.
  * - p6_sesiones_bloqueadas: confirmación 2 de 3 -- ruidosa (una sesión
  *   bloqueada un instante es común y se resuelve sola) pero hay que
- *   reaccionar rápido una vez confirmada, por eso la ventana es corta.
+ *   reaccionar rápido una vez confirmada, por eso la ventana es corta. El
+ *   tramo ADVERTENCIA usa entrada==salida==1 (sin banda muerta ahí) a
+ *   propósito -- ver el comentario dentro de sesionesBloqueadas().
  * - m8_over_alloc_delta: confirmación 3 de 5 -- "un evento aislado es
  *   ruido, un patrón sostenido no" (misma tabla de la skill). Se evalúa
  *   sobre la delta del intervalo (MuestrearInstanciaServicio.conDeltas()),
- *   nunca sobre el acumulado.
+ *   nunca sobre el acumulado. Mismo entrada==salida==1 en ADVERTENCIA que
+ *   sesionesBloqueadas(), y por la misma razón.
  *
  * Descartada por ahora: utilización de procesos/sesiones (candidata en el
  * plan de trabajo junto a b1). La skill la marca "EWMA α=0.3 + histéresis"
@@ -65,17 +68,29 @@ public final class AlertasIniciales {
             98, 95);  // CRITICO: entra a 98% (mismo límite duro del veto absoluto), sale a 95%
     }
 
+    /**
+     * ADVERTENCIA usa entrada==salida==1 (no 1/0 como los otros dos tramos):
+     * es un conteo que nunca es negativo, así que una salida en 0 sería
+     * inalcanzable con la comparación estricta de EvaluadorNivel (valor < 0
+     * nunca se cumple -- ver el comentario ahí) y el episodio quedaría
+     * abierto para siempre. Con entrada==salida==1, el mismo patrón que
+     * UmbralAlerta.binaria(), sale apenas el conteo vuelve a 0 -- sin banda
+     * muerta en ese tramo, pero la confirmación 2 de 3 ya protege la
+     * entrada del ruido, y salir de inmediato al despejar del todo es lo
+     * correcto para esta variable.
+     */
     public static UmbralAlerta sesionesBloqueadas() {
         return UmbralAlerta.conConfirmacion("p6_sesiones_bloqueadas",
-            1, 0,   // ADVERTENCIA: entra con 1 sesión bloqueada confirmada, sale al despejar del todo
+            1, 1,   // ADVERTENCIA: entra y sale en 1 (sale apenas vuelve a 0)
             3, 2,   // ALTO: entra a 3, sale a 2
             5, 4,   // CRITICO: entra a 5, sale a 4
             2, 3);  // confirmación 2 de 3
     }
 
+    /** Ver el comentario en sesionesBloqueadas() sobre por qué ADVERTENCIA usa entrada==salida==1. */
     public static UmbralAlerta presionPga() {
         return UmbralAlerta.conConfirmacion("m8_over_alloc_delta",
-            1, 0,     // ADVERTENCIA: entra con cualquier evento nuevo confirmado de sobreasignación
+            1, 1,     // ADVERTENCIA: entra y sale en 1 (sale apenas la delta vuelve a 0)
             5, 3,     // ALTO
             15, 10,   // CRITICO
             3, 5);    // confirmación 3 de 5

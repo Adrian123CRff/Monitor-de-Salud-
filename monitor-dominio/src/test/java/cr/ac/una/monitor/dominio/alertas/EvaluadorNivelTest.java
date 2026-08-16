@@ -52,6 +52,18 @@ class EvaluadorNivelTest {
     }
 
     @Test
+    void un_umbral_graduado_con_salida_en_un_valor_inalcanzable_nunca_cierra() {
+        // Bug real encontrado preparando una prueba de estrés en vivo: para un conteo que
+        // nunca es negativo, salidaAdvertencia=0 con < estricto (valor < 0) es inalcanzable
+        // -- el episodio quedaría abierto para siempre. Documenta por qué
+        // AlertasIniciales.sesionesBloqueadas()/presionPga() usan salidaAdvertencia=
+        // entradaAdvertencia en vez de 0 (ver esas fábricas).
+        UmbralAlerta conSalidaInalcanzable = UmbralAlerta.conConfirmacion("x", 1, 0, 3, 2, 5, 4, 2, 3);
+
+        assertThat(EvaluadorNivel.evaluar(0, Nivel.ADVERTENCIA, conSalidaInalcanzable)).isEqualTo(Nivel.ADVERTENCIA);
+    }
+
+    @Test
     void umbrales_inconsistentes_fallan_en_la_construccion() {
         assertThatIllegalArgumentException()
             .isThrownBy(() -> UmbralAlerta.sinConfirmacion("x", 75, 80, 90, 85, 98, 95));

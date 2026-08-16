@@ -29,6 +29,16 @@ public final class EvaluadorNivel {
             nivel = Nivel.ADVERTENCIA;
         }
 
+        // Estricto a propósito: UmbralAlerta.binaria() depende de esto --
+        // entrada==salida ahí, así que en el mismo evaluar() que hace
+        // NORMAL->CRITICO (valor >= entrada) la salida (valor < salida) NO
+        // debe cumplirse todavía para ese mismo valor, o la variable jamás
+        // dispararía (subiría y bajaría en la misma llamada). Un umbral
+        // graduado con salida en un valor inalcanzable (p. ej. salida=0
+        // para un conteo que nunca es negativo) no se arregla acá -- se
+        // arregla eligiendo un salida alcanzable en AlertasIniciales (ver
+        // sesionesBloqueadas()/presionPga(), encontrado preparando una
+        // prueba de estrés en vivo).
         if (nivel == Nivel.CRITICO && valor < u.salidaCritico()) {
             nivel = Nivel.ALTO;
         }
