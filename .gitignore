@@ -6,6 +6,12 @@ target/
 monitor-web/node_modules/
 monitor-web/dist/
 monitor-web/.vite/
+monitor-web/*.tsbuildinfo
+# frontend-maven-plugin descarga node/npm aquí (ver monitor-api/pom.xml)
+monitor-web/node/
+# ADR 0004: Vite compila directo aquí (ver monitor-web/vite.config.ts) --
+# generado en cada build, no se versiona (igual que target/).
+monitor-api/src/main/resources/static/
 
 # IDE
 .idea/

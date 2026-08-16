@@ -45,6 +45,51 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
+      <!-- ADR 0004: artefacto único. Compila monitor-web durante generate-resources,
+           antes de que process-resources copie src/main/resources: vite.config.ts
+           ya apunta su outDir directo a resources/static, sin paso de copia aparte.
+           Así, un "mvn install" desde un clon nuevo produce el jar completo sin
+           pasos manuales de npm. node/npm se descargan una sola vez (quedan
+           cacheados en monitor-web/node, ver installDirectory); las corridas
+           siguientes solo pagan npm install + npm run build. -->
+      <plugin>
+        <groupId>com.github.eirslett</groupId>
+        <artifactId>frontend-maven-plugin</artifactId>
+        <version>1.15.1</version>
+        <configuration>
+          <workingDirectory>${project.basedir}/../monitor-web</workingDirectory>
+          <installDirectory>${project.basedir}/../monitor-web</installDirectory>
+        </configuration>
+        <executions>
+          <execution>
+            <id>install-node-and-npm</id>
+            <goals>
+              <goal>install-node-and-npm</goal>
+            </goals>
+            <configuration>
+              <nodeVersion>v22.14.0</nodeVersion>
+            </configuration>
+          </execution>
+          <execution>
+            <id>npm-install</id>
+            <goals>
+              <goal>npm</goal>
+            </goals>
+            <configuration>
+              <arguments>install</arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>npm-build</id>
+            <goals>
+              <goal>npm</goal>
+            </goals>
+            <configuration>
+              <arguments>run build</arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 </project>
