@@ -107,12 +107,28 @@ variables iniciales lo necesitaba.*
   sentido? -- o utilización de procesos/sesiones). Sin resolver todavía.
 
 ## Módulo E — Frontend: piezas pendientes
-- **E1. UI de calibración.** `GET`/`PUT /calibracion` ya existen (ver
-  `CalibracionController`); falta la pantalla para editar pesos y el
-  umbral de veto desde el dashboard en vez de `curl`.
-- **E2. Drill-down por componente.** `GET /componentes/{c}` existe
-  (`ComponentesController`) pero nada en el dashboard lo consume todavía —
-  sería un panel de detalle al hacer clic en un tile de IP/IM/IA.
+- [x] **E1. UI de calibración.** `CalibracionPanel` (toggle desde el botón
+  "Calibración" del header) -- edita pesos/umbral de veto/checkbox y hace
+  `PUT /calibracion`, con validación de que los pesos sumen 1.0 en el
+  cliente (deshabilita "Guardar" si no, igual que la validación del
+  dominio) antes de disparar la llamada.
+- [x] **E2. Drill-down por componente.** Los tiles de `IndicadoresTiles`
+  ahora son clicables (`onSeleccionar`); `ComponenteDetalle` consume
+  `GET /componentes/{c}` y muestra cada vista (usuarios/fondo/actual) con
+  sus variables crudas.
+
+  Cobertura: 4 tests nuevos en `cliente.test.ts` (`obtenerComponente`,
+  `obtenerCalibracion`, `guardarCalibracion` con éxito y con 400), +
+  `CalibracionPanel.test.tsx`, `ComponenteDetalle.test.tsx`,
+  `IndicadoresTiles.test.tsx`. De paso se encontró y corrigió una falta de
+  limpieza entre tests (`@testing-library/react`'s `cleanup()` no estaba
+  registrado en `setup.ts`) que dejaba el DOM de un render anterior vivo
+  para el siguiente test del mismo archivo -- invisible mientras cada test
+  consultaba texto único, pero destapado por los tests de
+  `CalibracionPanel`, donde "Guardar calibración" se repite en cada test.
+  Verificado en vivo: reconstruí el `monitor-api` de docker compose con el
+  frontend nuevo y confirmé que el bundle servido trae el código de los
+  tres componentes nuevos.
 - **E3. Selector de instancia.** Hoy fijo a `INSTANCIA_ID = 1` en
   `cliente.ts`. No urge mientras siga ADR 0001 (una sola instancia), pero
   dejar la UI lista evita un refactor si eso cambia.

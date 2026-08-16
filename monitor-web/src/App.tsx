@@ -2,13 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   forzarMuestreo,
   obtenerAlertas,
+  obtenerComponente,
   obtenerHistorico,
   obtenerSalud,
   obtenerTablespaces,
   SinDatosAunError,
 } from './api/cliente';
-import type { Alerta, Isbd, Tablespace } from './api/tipos';
+import type { Alerta, Componente, Isbd, Muestra, Tablespace } from './api/tipos';
 import { AlertasPanel } from './componentes/AlertasPanel';
+import { CalibracionPanel } from './componentes/CalibracionPanel';
+import { ComponenteDetalle } from './componentes/ComponenteDetalle';
 import { HistoricoChart } from './componentes/HistoricoChart';
 import { IndicadoresTiles } from './componentes/IndicadoresTiles';
 import { IsbdHero } from './componentes/IsbdHero';
@@ -39,6 +42,11 @@ export function App() {
     cargando: true,
   });
   const [muestreando, setMuestreando] = useState(false);
+  const [calibracionAbierta, setCalibracionAbierta] = useState(false);
+  const [componenteSeleccionado, setComponenteSeleccionado] = useState<Componente | null>(null);
+  const [detalleComponente, setDetalleComponente] = useState<Record<string, Muestra> | null>(null);
+  const [detalleCargando, setDetalleCargando] = useState(false);
+  const [detalleError, setDetalleError] = useState<string | null>(null);
 
   const refrescar = useCallback(async () => {
     const hasta = new Date();
@@ -69,6 +77,23 @@ export function App() {
     return () => clearInterval(id);
   }, [refrescar]);
 
+  useEffect(() => {
+    if (!componenteSeleccionado) {
+      return;
+    }
+    setDetalleCargando(true);
+    setDetalleError(null);
+    obtenerComponente(componenteSeleccionado)
+      .then(setDetalleComponente)
+      .catch((e) => setDetalleError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setDetalleCargando(false));
+  }, [componenteSeleccionado]);
+
+  function seleccionarComponente(componente: Componente) {
+    setComponenteSeleccionado((actual) => (actual === componente ? null : componente));
+    setDetalleComponente(null);
+  }
+
   async function manejarForzarMuestreo() {
     setMuestreando(true);
     try {
@@ -91,10 +116,19 @@ export function App() {
         </span>
         {estado.isbd && <span className="badge">muestra: {hace(estado.isbd.momento)}</span>}
         <span className="spacer" />
+        <button onClick={() => setCalibracionAbierta((a) => !a)}>
+          {calibracionAbierta ? 'Ocultar calibración' : 'Calibración'}
+        </button>
         <button onClick={manejarForzarMuestreo} disabled={muestreando}>
           {muestreando ? 'Muestreando…' : 'Forzar muestreo'}
         </button>
       </header>
+
+      {calibracionAbierta && (
+        <div className="grid" style={{ marginBottom: 16 }}>
+          <CalibracionPanel onCerrar={() => setCalibracionAbierta(false)} />
+        </div>
+      )}
 
       {estado.cargando && <div className="empty">Cargando…</div>}
 
@@ -120,7 +154,17 @@ export function App() {
       {estado.isbd && (
         <div className="grid">
           <IsbdHero isbd={estado.isbd} />
-          <IndicadoresTiles actual={estado.isbd} historico={estado.historico} />
+          <IndicadoresTiles actual={estado.isbd} historico={estado.historico} onSeleccionar={seleccionarComponente} />
+
+          {componenteSeleccionado && (
+            <ComponenteDetalle
+              componente={componenteSeleccionado}
+              detalle={detalleComponente}
+              cargando={detalleCargando}
+              error={detalleError}
+              onCerrar={() => setComponenteSeleccionado(null)}
+            />
+          )}
 
           <section className="card c12">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>

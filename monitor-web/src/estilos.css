@@ -336,3 +336,80 @@ svg {
   text-align: center;
   color: var(--ink-2);
 }
+
+.tile-clicable {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+.tile-clicable:hover {
+  background: var(--wash);
+}
+
+.calibracion-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.calibracion-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.calibracion-campo input[type='number'] {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  width: 100%;
+}
+.calibracion-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+}
+.calibracion-mensaje {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+.calibracion-error {
+  color: var(--critical);
+}
+
+.detalle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-top: 12px;
+}
+.detalle-vista .lab {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.detalle-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.detalle-tabla tr {
+  border-bottom: 1px solid var(--grid);
+}
+.detalle-tabla tr:last-child {
+  border-bottom: 0;
+}
+.detalle-tabla td {
+  padding: 5px 0;
+}
+.detalle-valor {
+  text-align: right;
+}

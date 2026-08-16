@@ -49,3 +49,21 @@ export interface ProblemDetail {
   detail: string;
   instance?: string;
 }
+
+/**
+ * GET .../componentes/{c} -- detalle crudo de un componente. Para PROCESOS
+ * trae "usuarios" y "fondo" por separado (ver ComponentesController); los
+ * demás traen solo "actual".
+ */
+export interface Muestra {
+  componente: Componente;
+  momento: string; // ISO-8601
+  valores: Record<string, number>;
+}
+
+/** GET/PUT .../calibracion. */
+export interface Calibracion {
+  pesos: Record<string, number>;
+  vetoHabilitado: boolean;
+  umbralVetoComponente: number;
+}

@@ -1,4 +1,4 @@
-import type { Alerta, Isbd, ProblemDetail, Tablespace } from './tipos';
+import type { Alerta, Calibracion, Componente, Isbd, Muestra, ProblemDetail, Tablespace } from './tipos';
 
 // ADR 0001: una sola instancia Oracle (Docker), coincide con monitor.instancia-id
 // del backend (planificador). No hay RepositorioInstancias todavía -- ver ADR 0001.
@@ -46,4 +46,26 @@ export async function forzarMuestreo(instancia = INSTANCIA_ID): Promise<Isbd> {
     throw new Error(problema?.detail ?? `${resp.status} ${resp.statusText}`);
   }
   return resp.json() as Promise<Isbd>;
+}
+
+/** Componente.PROCESOS trae "usuarios" y "fondo"; los demás, solo "actual" (ver ComponentesController). */
+export function obtenerComponente(componente: Componente, instancia = INSTANCIA_ID): Promise<Record<string, Muestra>> {
+  return obtener<Record<string, Muestra>>(`${BASE}/instancias/${instancia}/componentes/${componente}`);
+}
+
+export function obtenerCalibracion(): Promise<Calibracion> {
+  return obtener<Calibracion>(`${BASE}/calibracion`);
+}
+
+export async function guardarCalibracion(nueva: Calibracion): Promise<Calibracion> {
+  const resp = await fetch(`${BASE}/calibracion`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(nueva),
+  });
+  if (!resp.ok) {
+    const problema = await resp.json().catch(() => null as ProblemDetail | null);
+    throw new Error(problema?.detail ?? `${resp.status} ${resp.statusText}`);
+  }
+  return resp.json() as Promise<Calibracion>;
 }

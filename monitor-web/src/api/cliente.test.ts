@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { forzarMuestreo, obtenerAlertas, obtenerSalud, obtenerTablespaces, SinDatosAunError } from './cliente';
-import type { Isbd } from './tipos';
+import {
+  forzarMuestreo,
+  guardarCalibracion,
+  obtenerAlertas,
+  obtenerCalibracion,
+  obtenerComponente,
+  obtenerSalud,
+  obtenerTablespaces,
+  SinDatosAunError,
+} from './cliente';
+import type { Calibracion, Isbd } from './tipos';
 
 function respuestaJson(status: number, cuerpo: unknown): Response {
   return {
@@ -90,5 +99,53 @@ describe('forzarMuestreo', () => {
 
     await expect(forzarMuestreo()).resolves.toEqual(isbdEjemplo);
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/instancias/1/muestrear', { method: 'POST' });
+  });
+});
+
+describe('obtenerComponente', () => {
+  it('pide la ruta del componente indicado', async () => {
+    const detalle = { usuarios: { componente: 'PROCESOS', momento: '2026-08-16T10:00:00Z', valores: { p1: 1 } } };
+    const fetchMock = vi.fn().mockResolvedValue(respuestaJson(200, detalle));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(obtenerComponente('PROCESOS')).resolves.toEqual(detalle);
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/instancias/1/componentes/PROCESOS');
+  });
+});
+
+describe('calibración', () => {
+  const calibracionEjemplo: Calibracion = {
+    pesos: { PROCESOS: 0.3, MEMORIA: 0.35, ARCHIVOS: 0.35 },
+    vetoHabilitado: true,
+    umbralVetoComponente: 40,
+  };
+
+  it('obtenerCalibracion devuelve la vigente', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respuestaJson(200, calibracionEjemplo)));
+
+    await expect(obtenerCalibracion()).resolves.toEqual(calibracionEjemplo);
+  });
+
+  it('guardarCalibracion hace PUT con el cuerpo JSON y devuelve lo guardado', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respuestaJson(200, calibracionEjemplo));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(guardarCalibracion(calibracionEjemplo)).resolves.toEqual(calibracionEjemplo);
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/calibracion', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calibracionEjemplo),
+    });
+  });
+
+  it('guardarCalibracion con pesos invalidos (400) propaga el detail del ProblemDetail', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        respuestaJson(400, { title: 'Argumento inválido', status: 400, detail: 'suman 0.9' }),
+      ),
+    );
+
+    await expect(guardarCalibracion(calibracionEjemplo)).rejects.toThrow('suman 0.9');
   });
 });
