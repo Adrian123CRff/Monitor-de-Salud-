@@ -63,20 +63,25 @@ puede resolver solo escribiendo código.*
   pesos distintos?") es la alternativa más barata.
 
 ## Módulo C — Testing que falta
-*`monitor-api` solo tiene el ArchUnit test; el frontend no tiene ninguno.*
+*`monitor-api` solo tenía el ArchUnit test; el frontend no tenía ninguno.*
 
-- **C1. Tests de controladores REST.** `@WebMvcTest` o `MockMvc` para
-  `SaludController`, `ComponentesController`, `TablespacesController`,
-  `AlertasController`, `CalibracionController` — hoy la única evidencia de
-  que funcionan es la sesión manual de `curl` contra el JAR real.
-- **C2. Tests de frontend.** Vitest + React Testing Library — al menos los
-  componentes con lógica no trivial (`IsbdHero` con veto/parcial,
-  `AlertasPanel`, `HistoricoChart` con valores `null`).
+- [x] **C1. Tests de controladores REST.** `@WebMvcTest` (Spring Boot 4.1.0
+  lo movió a `spring-boot-webmvc-test` / `org.springframework.boot.webmvc.test.autoconfigure`
+  — hubo que agregar `spring-boot-starter-webmvc-test` como dependencia de
+  test explícita) para `SaludController`, `ComponentesController`,
+  `TablespacesController`, `AlertasController`, `CalibracionController`.
+  16 tests, cubren el mapeo DTO/JSON y los códigos de error de
+  `ManejadorErrores`.
+- [x] **C2. Tests de frontend.** Vitest + React Testing Library (`npm run
+  test`, no forma parte de `npm run build`): `utilidades.ts`, `api/cliente.ts`
+  (fetch mockeado, 404 → `SinDatosAunError`), `IsbdHero` (veto/parcial),
+  `AlertasPanel`, `TablespacesPanel` (orden peor-primero). 38 tests.
 - **C3. Verificación visual real en navegador.** Pendiente desde que se
   declinó `claude-in-chrome` esta sesión — la próxima vez que esté
   disponible, correr el dev server y confirmar visualmente que el dashboard
   renderiza como se espera (hoy solo está verificado que los datos fluyen
-  correctamente, no el render).
+  correctamente y que los componentes renderizan el DOM esperado bajo
+  jsdom, no el render real en un navegador).
 
 ## Módulo D — Alertas: variables adicionales
 *`ConfirmadorTemporal` existe y está probado (ver `EvaluadorNivelTest`,

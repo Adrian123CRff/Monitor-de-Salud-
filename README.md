@@ -80,6 +80,17 @@ de esto — necesitan Oracle y Postgres reales corriendo. Con
 # o "-Dtest=ClaseA,ClaseB" para correr varias
 ```
 
+### Frontend
+
+```bash
+cd monitor-web
+npm run test
+```
+
+Vitest + React Testing Library — no forma parte de `npm run build` (que
+`mvn test`/`mvn install` sí dispara vía `frontend-maven-plugin`), así que un
+test roto nunca bloquea el build del jar.
+
 ## Estructura
 
 ```
