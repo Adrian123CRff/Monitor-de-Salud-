@@ -18,6 +18,7 @@ import cr.ac.una.monitor.dominio.agregacion.CombinadorSubIndicadores;
 import cr.ac.una.monitor.dominio.agregacion.MotorIndicadores;
 import cr.ac.una.monitor.dominio.alertas.Alerta;
 import cr.ac.una.monitor.dominio.alertas.AlertasIniciales;
+import cr.ac.una.monitor.dominio.alertas.ConfirmadorTemporal;
 import cr.ac.una.monitor.dominio.alertas.EvaluadorNivel;
 import cr.ac.una.monitor.dominio.alertas.MotorAlertas;
 import cr.ac.una.monitor.dominio.alertas.Nivel;
@@ -89,16 +90,19 @@ import java.util.function.Supplier;
  * nuevo) y ConsultarHistorico, ambos puerto/entrada sin implementación
  * hasta ahora.
  *
- * Alertas (dominio.alertas, MONITOR_ALERTAS): se evalúan solo para las
- * variables de AlertasIniciales (a2_datafiles_offline y peor_tablespace_pct
- * por tablespace), y solo si el agregado de archivos se pudo leer este
- * ciclo -- mismo criterio que el detalle de tablespaces. Cada evaluación
- * consulta la alerta abierta (si hay), calcula el nivel con histéresis
- * (EvaluadorNivel) y deja que MotorAlertas decida abrir/cerrar/escalar
- * (ver ResultadoEvaluacion). ConfirmadorTemporal existe pero no está
- * conectado aquí todavía: ninguna de las dos variables iniciales lo
- * necesita (ver AlertasIniciales); sesiones bloqueadas y presión de PGA
- * sí lo necesitarían cuando se agreguen.
+ * Alertas (dominio.alertas, MONITOR_ALERTAS): se evalúan las cuatro
+ * variables de AlertasIniciales. a2_datafiles_offline y peor_tablespace_pct
+ * (por tablespace) solo si el agregado de archivos se pudo leer este ciclo
+ * -- mismo criterio que el detalle de tablespaces. p6_sesiones_bloqueadas
+ * y m8_over_alloc_delta se evalúan junto con procesos/memoria, cada una
+ * condicionada solo a que su propio componente se haya recolectado. Cada
+ * evaluación consulta la alerta abierta (si hay), calcula el nivel con
+ * histéresis (EvaluadorNivel) y deja que MotorAlertas decida abrir/cerrar/
+ * escalar (ver ResultadoEvaluacion). Para las variables con confirmación
+ * (ver UmbralAlerta.conConfirmacion()/ConfirmadorTemporal), el disparo
+ * inicial (NORMAL -> algo distinto) además exige que N de las últimas M
+ * muestras (RepositorioMuestras.ultimasN) hayan cruzado el umbral -- una
+ * vez abierto el episodio, escalar/cerrar es inmediato.
  */
 @Service
 public class MuestrearInstanciaServicio implements MuestrearInstancia {
@@ -149,9 +153,15 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
             .map(cruda -> conDeltas(instancia, cruda));
         Optional<Muestra> muestraArchivos = recolectarSeguro("archivos", () -> archivos.recolectar(instancia));
 
-        muestraUsuarios.ifPresent(m -> muestras.guardar(instancia, m));
+        muestraUsuarios.ifPresent(m -> {
+            muestras.guardar(instancia, m);
+            evaluarAlertaSesionesBloqueadas(instancia, m);
+        });
         muestraFondo.ifPresent(m -> muestrasFondo.guardar(instancia, m));
-        muestraMemoria.ifPresent(m -> muestras.guardar(instancia, m));
+        muestraMemoria.ifPresent(m -> {
+            muestras.guardar(instancia, m);
+            evaluarAlertaPresionPga(instancia, m);
+        });
         muestraArchivos.ifPresent(m -> {
             muestras.guardar(instancia, m);
             List<DetalleTablespace> detalleTablespaces =
@@ -201,29 +211,55 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         return Optional.of(combinador.combinar(Componente.PROCESOS, presentes, pesos));
     }
 
-    /** Ver AlertasIniciales: por ahora, datafiles offline (binaria) y peor_tablespace_pct por tablespace. */
+    /** Ver AlertasIniciales: datafiles offline (binaria) y peor_tablespace_pct por tablespace. */
     private void evaluarAlertas(InstanciaId instancia, Muestra muestraArchivos, List<DetalleTablespace> detalle) {
-        evaluarAlertaSimple(instancia, Componente.ARCHIVOS, AlertasIniciales.datafilesOffline(),
+        evaluarAlerta(instancia, Componente.ARCHIVOS, AlertasIniciales.datafilesOffline(),
             muestraArchivos.valor("a2_datafiles_offline"), Optional.empty(),
             valor -> "Datafiles offline: %d (umbral: 1).".formatted((int) valor));
 
         for (DetalleTablespace ts : detalle) {
-            evaluarAlertaSimple(instancia, Componente.ARCHIVOS, AlertasIniciales.peorTablespacePct(),
+            evaluarAlerta(instancia, Componente.ARCHIVOS, AlertasIniciales.peorTablespacePct(),
                 ts.usedPercent(), Optional.of(ts.nombre()),
                 valor -> "Tablespace %s al %.1f%%.".formatted(ts.nombre(), valor));
         }
     }
 
+    /** Ver AlertasIniciales.sesionesBloqueadas(): confirmación 2 de 3. */
+    private void evaluarAlertaSesionesBloqueadas(InstanciaId instancia, Muestra muestraUsuarios) {
+        evaluarAlerta(instancia, Componente.PROCESOS, AlertasIniciales.sesionesBloqueadas(),
+            muestraUsuarios.valor("p6_sesiones_bloqueadas"), Optional.empty(),
+            valor -> "Sesiones bloqueadas: %d.".formatted((int) valor));
+    }
+
+    /**
+     * Ver AlertasIniciales.presionPga(): confirmación 3 de 5, sobre la delta
+     * del intervalo (conDeltas()), no el acumulado. Sin historial previo
+     * (primera muestra de la instancia) la delta queda ausente -- no hay
+     * nada que evaluar todavía este ciclo, igual que CalculadorComponente
+     * la excluye del puntaje.
+     */
+    private void evaluarAlertaPresionPga(InstanciaId instancia, Muestra muestraMemoria) {
+        Double delta = muestraMemoria.valores().get("m8_over_alloc_delta");
+        if (delta == null) {
+            return;
+        }
+        evaluarAlerta(instancia, Componente.MEMORIA, AlertasIniciales.presionPga(), delta, Optional.empty(),
+            valor -> "Over-allocation de PGA: %.0f evento(s) nuevo(s) en este intervalo.".formatted(valor));
+    }
+
     /**
      * Consulta la alerta abierta de (instancia, variable, entidad), calcula el
-     * nivel con histéresis contra el nivel anterior (NORMAL si no había ninguna
-     * abierta), y deja que MotorAlertas decida abrir/cerrar/escalar.
+     * nivel candidato con histéresis contra el nivel anterior (NORMAL si no
+     * había ninguna abierta, ver EvaluadorNivel), lo confirma si el umbral lo
+     * exige (ver confirmarSiHaceFalta), y deja que MotorAlertas decida
+     * abrir/cerrar/escalar.
      */
-    private void evaluarAlertaSimple(InstanciaId instancia, Componente componente, UmbralAlerta u, double valor,
+    private void evaluarAlerta(InstanciaId instancia, Componente componente, UmbralAlerta u, double valor,
             Optional<String> entidad, DoubleFunction<String> descripcion) {
         Optional<Alerta> abierta = alertas.buscarAbierta(instancia, u.variable(), entidad);
         Nivel nivelAnterior = abierta.map(Alerta::nivel).orElse(Nivel.NORMAL);
-        Nivel nivelNuevo = EvaluadorNivel.evaluar(valor, nivelAnterior, u);
+        Nivel nivelCandidato = EvaluadorNivel.evaluar(valor, nivelAnterior, u);
+        Nivel nivelNuevo = confirmarSiHaceFalta(instancia, componente, u, nivelAnterior, nivelCandidato);
         Instant ahora = Instant.now();
 
         ResultadoEvaluacion resultado = motorAlertas.evaluar(nivelNuevo, abierta, () -> new Alerta(
@@ -239,6 +275,30 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
                 alertas.abrir(r.aAbrir());
             }
         }
+    }
+
+    /**
+     * Solo el disparo inicial (NORMAL -> algo distinto) de una variable con
+     * confirmación (ver UmbralAlerta.conConfirmacion()) queda sujeto a
+     * ConfirmadorTemporal: si N de las últimas M muestras (la actual incluida,
+     * ya persistida en este punto -- ver ejecutar()) no cruzaron
+     * entradaAdvertencia, el candidato se descarta y el episodio se queda en
+     * NORMAL este ciclo. Escalar o cerrar un episodio ya abierto no pasa por
+     * aquí (nivelAnterior != NORMAL), ni las variables sin confirmación
+     * (confirmacionesRequeridas() == 0, ConfirmadorTemporal.confirmada con
+     * "0 de 0" siempre es true).
+     */
+    private Nivel confirmarSiHaceFalta(InstanciaId instancia, Componente componente, UmbralAlerta u,
+            Nivel nivelAnterior, Nivel nivelCandidato) {
+        if (nivelAnterior != Nivel.NORMAL || nivelCandidato == Nivel.NORMAL || u.confirmacionesRequeridas() == 0) {
+            return nivelCandidato;
+        }
+        List<Muestra> ultimas = muestras.ultimasN(instancia, componente, u.ventanaConfirmacion());
+        List<Boolean> cruzo = ultimas.stream()
+            .map(m -> m.valores().getOrDefault(u.variable(), 0.0) >= u.entradaAdvertencia())
+            .toList();
+        boolean confirmada = ConfirmadorTemporal.confirmada(cruzo, u.confirmacionesRequeridas(), u.ventanaConfirmacion());
+        return confirmada ? nivelCandidato : Nivel.NORMAL;
     }
 
     private double umbralDe(Nivel nivel, UmbralAlerta u) {

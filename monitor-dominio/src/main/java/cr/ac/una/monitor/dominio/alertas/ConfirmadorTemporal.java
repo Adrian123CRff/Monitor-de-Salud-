@@ -12,12 +12,11 @@ import java.util.List;
  * confirmaciones requeridas) en vez de este mecanismo.
  *
  * Pura a propósito: no sabe de dónde salen las "últimas" -- quien la llama
- * arma la lista (típicamente desde RepositorioMuestras.enRango, ver
- * catalogo-variables.md). No conectado todavía al orquestador de
- * MuestrearInstanciaServicio (ver AlertasIniciales): ninguna de las dos
- * variables de la primera pasada de alertas necesita confirmación --
- * queda lista para cuando se agregue una que sí (p. ej. sesiones
- * bloqueadas, "2 de 3" según la misma tabla de la skill).
+ * arma la lista (MuestrearInstanciaServicio, con RepositorioMuestras.ultimasN;
+ * ver AlertasIniciales.sesionesBloqueadas()/presionPga() para las dos
+ * variables que la usan, "2 de 3" y "3 de 5" según la tabla de la skill).
+ * Solo gatea el disparo inicial (NORMAL -> algo distinto de NORMAL); una vez
+ * abierto el episodio, EvaluadorNivel reacciona sin confirmación adicional.
  */
 public final class ConfirmadorTemporal {
 

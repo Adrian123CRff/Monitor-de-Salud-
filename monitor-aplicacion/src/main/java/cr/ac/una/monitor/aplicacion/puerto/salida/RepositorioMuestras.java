@@ -17,4 +17,13 @@ public interface RepositorioMuestras {
     Optional<Muestra> ultima(InstanciaId instancia, Componente componente);
 
     List<Muestra> enRango(InstanciaId instancia, Componente componente, Instant desde, Instant hasta);
+
+    /**
+     * Las últimas n muestras, la más reciente primero -- ConfirmadorTemporal
+     * (dominio.alertas) necesita "N de las últimas M por conteo", no por
+     * ventana de tiempo (enRango serviría solo si el intervalo de muestreo
+     * fuera constante y conocido aquí, y no lo es: es configuración de
+     * monitor-api, ver application.yml).
+     */
+    List<Muestra> ultimasN(InstanciaId instancia, Componente componente, int n);
 }

@@ -123,6 +123,17 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
             .list();
     }
 
+    @Override
+    public List<Muestra> ultimasN(InstanciaId instancia, Componente componente, int n) {
+        String tabla = tabla(componente);
+        return jdbc.sql("SELECT * FROM " + tabla + " WHERE instancia_id = :instancia_id "
+                + "ORDER BY muestreado_en DESC LIMIT :n")
+            .param("instancia_id", instancia.valor())
+            .param("n", n)
+            .query((rs, rowNum) -> mapearFila(rs, componente))
+            .list();
+    }
+
     private Muestra mapearFila(ResultSet rs, Componente componente) throws SQLException {
         Map<String, Double> valores = new HashMap<>();
         ResultSetMetaData meta = rs.getMetaData();

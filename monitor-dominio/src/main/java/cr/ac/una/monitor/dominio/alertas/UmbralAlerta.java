@@ -57,4 +57,25 @@ public record UmbralAlerta(
     public static UmbralAlerta binaria(String variable, double umbral) {
         return new UmbralAlerta(variable, umbral, umbral, umbral, umbral, umbral, umbral, 0, 0);
     }
+
+    /**
+     * Con confirmación temporal (ver ConfirmadorTemporal): "N de las últimas M"
+     * deben cruzar entradaAdvertencia antes de abrir el episodio -- para
+     * variables continuas y ruidosas donde una lectura aislada no debe
+     * disparar (sesiones bloqueadas "2 de 3", presión de PGA "3 de 5", ver
+     * skill diseno-de-indicadores / references/calibracion.md, tabla "Qué
+     * mecanismo para qué variable"). Una vez abierto el episodio, escalar o
+     * cerrar vuelve a ser inmediato (EvaluadorNivel, sin confirmación) --
+     * la confirmación protege solo el disparo inicial, no la reacción a un
+     * empeoramiento real.
+     */
+    public static UmbralAlerta conConfirmacion(String variable,
+            double entradaAdvertencia, double salidaAdvertencia,
+            double entradaAlto, double salidaAlto,
+            double entradaCritico, double salidaCritico,
+            int confirmacionesRequeridas, int ventanaConfirmacion) {
+        return new UmbralAlerta(variable, entradaAdvertencia, salidaAdvertencia,
+            entradaAlto, salidaAlto, entradaCritico, salidaCritico,
+            confirmacionesRequeridas, ventanaConfirmacion);
+    }
 }

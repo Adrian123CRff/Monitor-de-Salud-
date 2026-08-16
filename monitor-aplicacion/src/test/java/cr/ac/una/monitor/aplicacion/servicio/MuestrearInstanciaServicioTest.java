@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -78,6 +79,11 @@ class MuestrearInstanciaServicioTest {
 
         @Override
         public List<Muestra> enRango(InstanciaId instancia, Componente componente, Instant desde, Instant hasta) {
+            return List.of();
+        }
+
+        @Override
+        public List<Muestra> ultimasN(InstanciaId instancia, Componente componente, int n) {
             return List.of();
         }
     };
@@ -259,6 +265,11 @@ class MuestrearInstanciaServicioTest {
 
             @Override
             public List<Muestra> enRango(InstanciaId instancia, Componente componente, Instant desde, Instant hasta) {
+                return List.of();
+            }
+
+            @Override
+            public List<Muestra> ultimasN(InstanciaId instancia, Componente componente, int n) {
                 return List.of();
             }
         };
@@ -509,5 +520,173 @@ class MuestrearInstanciaServicioTest {
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
             .noneMatch(a -> a.variable().equals("peor_tablespace_pct"));
+    }
+
+    /**
+     * A diferencia de repositorioMuestrasFalso (siempre vacío), esta lleva un
+     * historial real por componente para poder probar ConfirmadorTemporal --
+     * guardar() lo actualiza (la más reciente primero), igual que
+     * ultimasN/ultima lo devolverían de Postgres real.
+     */
+    private static class RepositorioMuestrasConHistorial implements RepositorioMuestras {
+        private final Map<Componente, List<Muestra>> porComponente = new LinkedHashMap<>();
+
+        void sembrar(Componente componente, Muestra... previas) {
+            porComponente.computeIfAbsent(componente, k -> new ArrayList<>()).addAll(List.of(previas));
+        }
+
+        @Override
+        public void guardar(InstanciaId instancia, Muestra muestra) {
+            porComponente.computeIfAbsent(muestra.componente(), k -> new ArrayList<>()).add(0, muestra);
+        }
+
+        @Override
+        public Optional<Muestra> ultima(InstanciaId instancia, Componente componente) {
+            List<Muestra> historial = porComponente.get(componente);
+            return historial == null || historial.isEmpty() ? Optional.empty() : Optional.of(historial.get(0));
+        }
+
+        @Override
+        public List<Muestra> enRango(InstanciaId instancia, Componente componente, Instant desde, Instant hasta) {
+            return List.of();
+        }
+
+        @Override
+        public List<Muestra> ultimasN(InstanciaId instancia, Componente componente, int n) {
+            List<Muestra> historial = porComponente.getOrDefault(componente, List.of());
+            return historial.size() <= n ? List.copyOf(historial) : List.copyOf(historial.subList(0, n));
+        }
+    }
+
+    private RecolectorProcesos procesosConSesionesBloqueadas(double p6) {
+        return instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", p6, "bloqueo_max_seg", 0.0
+        ), false);
+    }
+
+    private static final RecolectorMemoria MEMORIA_SANA = instancia -> new Muestra(Componente.MEMORIA, Instant.now(),
+        Map.of("pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0), false);
+    private static final RecolectorArchivos ARCHIVOS_SANOS = instancia -> new Muestra(Componente.ARCHIVOS, Instant.now(),
+        Map.of("peor_tablespace_pct", 40.0, "a2_datafiles_offline", 0.0,
+            "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0), false);
+
+    @Test
+    void sesiones_bloqueadas_una_sola_lectura_que_cruza_no_confirma_2_de_3_y_no_abre_alerta() {
+        RepositorioMuestrasConHistorial repositorio = new RepositorioMuestrasConHistorial();
+        // Dos lecturas previas SIN bloqueos -- junto con la actual (que sí
+        // cruza) son 1 de 3, no alcanza la confirmación 2 de 3.
+        repositorio.sembrar(Componente.PROCESOS,
+            new Muestra(Componente.PROCESOS, Instant.now(), Map.of("p6_sesiones_bloqueadas", 0.0), false),
+            new Muestra(Componente.PROCESOS, Instant.now(), Map.of("p6_sesiones_bloqueadas", 0.0), false));
+
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(2.0),
+            FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS, repositorio, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+
+        servicio.ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .noneMatch(a -> a.variable().equals("p6_sesiones_bloqueadas"));
+    }
+
+    @Test
+    void sesiones_bloqueadas_confirmadas_2_de_3_abre_la_alerta() {
+        RepositorioMuestrasConHistorial repositorio = new RepositorioMuestrasConHistorial();
+        // Una previa con bloqueo, otra sin -- junto con la actual (con bloqueo)
+        // son 2 de 3: confirma.
+        repositorio.sembrar(Componente.PROCESOS,
+            new Muestra(Componente.PROCESOS, Instant.now(), Map.of("p6_sesiones_bloqueadas", 2.0), false),
+            new Muestra(Componente.PROCESOS, Instant.now(), Map.of("p6_sesiones_bloqueadas", 0.0), false));
+
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(2.0),
+            FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS, repositorio, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+
+        servicio.ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA)).anySatisfy(a -> {
+            assertThat(a.variable()).isEqualTo("p6_sesiones_bloqueadas");
+            assertThat(a.nivel()).isEqualTo(Nivel.ADVERTENCIA);
+        });
+    }
+
+    @Test
+    void sesiones_bloqueadas_ya_abierta_escala_de_inmediato_sin_reconfirmar() {
+        RepositorioMuestrasConHistorial repositorio = new RepositorioMuestrasConHistorial();
+        repositorio.sembrar(Componente.PROCESOS,
+            new Muestra(Componente.PROCESOS, Instant.now(), Map.of("p6_sesiones_bloqueadas", 2.0), false),
+            new Muestra(Componente.PROCESOS, Instant.now(), Map.of("p6_sesiones_bloqueadas", 0.0), false));
+
+        // Ciclo 1: confirma 2 de 3 y abre en ADVERTENCIA (igual que el test anterior).
+        new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(2.0), FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS,
+            repositorio, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
+            repositorioAlertasFalso, calibracionFalsa).ejecutar(INSTANCIA);
+
+        // Ciclo 2: una sola lectura en 6 (CRITICO) -- sin ninguna otra lectura
+        // adicional que la confirme "2 de 3" en ese nivel. Como el episodio ya
+        // estaba abierto (nivelAnterior != NORMAL), escala igual, de inmediato.
+        new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(6.0), FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS,
+            repositorio, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
+            repositorioAlertasFalso, calibracionFalsa).ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA)).anySatisfy(a -> {
+            assertThat(a.variable()).isEqualTo("p6_sesiones_bloqueadas");
+            assertThat(a.nivel()).isEqualTo(Nivel.CRITICO);
+        });
+    }
+
+    @Test
+    void presion_de_pga_dos_de_cinco_no_confirma_y_no_abre_alerta() {
+        RepositorioMuestrasConHistorial repositorio = new RepositorioMuestrasConHistorial();
+        // Historial (la más reciente primero): la [0] trae m8_over_alloc_acum
+        // para que conDeltas() calcule la delta del ciclo actual contra ella.
+        repositorio.sembrar(Componente.MEMORIA,
+            new Muestra(Componente.MEMORIA, Instant.now(),
+                Map.of("m8_over_alloc_acum", 100.0, "m8_over_alloc_delta", 1.0), false),
+            new Muestra(Componente.MEMORIA, Instant.now(), Map.of("m8_over_alloc_delta", 0.0), false),
+            new Muestra(Componente.MEMORIA, Instant.now(), Map.of("m8_over_alloc_delta", 0.0), false),
+            new Muestra(Componente.MEMORIA, Instant.now(), Map.of("m8_over_alloc_delta", 0.0), false));
+
+        // acum sube de 100 a 101 -> delta actual = 1.0 (cruza). Junto con la
+        // semilla [0] (delta 1.0, también cruza) son 2 de 5: no confirma 3 de 5.
+        RecolectorMemoria memoriaConPresion = instancia -> new Muestra(Componente.MEMORIA, Instant.now(),
+            Map.of("pga_uso_pct", 60.0, "m8_over_alloc_acum", 101.0, "m10_multipass_acum", 0.0), false);
+
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0),
+            FONDO_SANO, memoriaConPresion, ARCHIVOS_SANOS, repositorio, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+
+        servicio.ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .noneMatch(a -> a.variable().equals("m8_over_alloc_delta"));
+    }
+
+    @Test
+    void presion_de_pga_confirmada_3_de_5_abre_la_alerta() {
+        RepositorioMuestrasConHistorial repositorio = new RepositorioMuestrasConHistorial();
+        repositorio.sembrar(Componente.MEMORIA,
+            new Muestra(Componente.MEMORIA, Instant.now(),
+                Map.of("m8_over_alloc_acum", 100.0, "m8_over_alloc_delta", 1.0), false),
+            new Muestra(Componente.MEMORIA, Instant.now(), Map.of("m8_over_alloc_delta", 1.0), false),
+            new Muestra(Componente.MEMORIA, Instant.now(), Map.of("m8_over_alloc_delta", 0.0), false),
+            new Muestra(Componente.MEMORIA, Instant.now(), Map.of("m8_over_alloc_delta", 0.0), false));
+
+        // acum sube de 100 a 101 -> delta actual = 1.0. Junto con las dos
+        // semillas en 1.0 son 3 de 5: confirma.
+        RecolectorMemoria memoriaConPresion = instancia -> new Muestra(Componente.MEMORIA, Instant.now(),
+            Map.of("pga_uso_pct", 60.0, "m8_over_alloc_acum", 101.0, "m10_multipass_acum", 0.0), false);
+
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0),
+            FONDO_SANO, memoriaConPresion, ARCHIVOS_SANOS, repositorio, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+
+        servicio.ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA)).anySatisfy(a -> {
+            assertThat(a.variable()).isEqualTo("m8_over_alloc_delta");
+            assertThat(a.nivel()).isEqualTo(Nivel.ADVERTENCIA);
+        });
     }
 }

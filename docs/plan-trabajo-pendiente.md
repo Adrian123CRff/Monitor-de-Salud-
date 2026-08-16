@@ -85,17 +85,26 @@ puede resolver solo escribiendo código.*
 
 ## Módulo D — Alertas: variables adicionales
 *`ConfirmadorTemporal` existe y está probado (ver `EvaluadorNivelTest`,
-`ConfirmadorTemporalTest`) pero no está conectado — ninguna de las dos
-variables iniciales lo necesita.*
+`ConfirmadorTemporalTest`) pero no estaba conectado — ninguna de las dos
+variables iniciales lo necesitaba.*
 
-- **D1. Sesiones bloqueadas (`p6_sesiones_bloqueadas`).** Confirmación "2 de
-  3" según la tabla de la skill — variable ruidosa que necesita reaccionar
-  rápido.
-- **D2. Presión de PGA (`m8_over_alloc_delta`).** Confirmación "3 de 5" — un
-  evento aislado es ruido, un patrón sostenido no.
+- [x] **D1. Sesiones bloqueadas (`p6_sesiones_bloqueadas`).** Confirmación
+  "2 de 3" (`AlertasIniciales.sesionesBloqueadas()`).
+- [x] **D2. Presión de PGA (`m8_over_alloc_delta`).** Confirmación "3 de 5"
+  (`AlertasIniciales.presionPga()`), sobre la delta del intervalo, nunca el
+  acumulado.
+
+  Implementación: `UmbralAlerta.conConfirmacion()` (nuevo factory) +
+  `MuestrearInstanciaServicio.confirmarSiHaceFalta()` -- solo el disparo
+  inicial (NORMAL → algo distinto) exige N de las últimas M muestras
+  (`RepositorioMuestras.ultimasN()`, nuevo método de puerto); escalar o
+  cerrar un episodio ya abierto es inmediato, sin reconfirmar. Cobertura:
+  5 tests nuevos en `MuestrearInstanciaServicioTest` (no confirma con 1/3,
+  confirma con 2/3, escala sin reconfirmar, no confirma con 2/5, confirma
+  con 3/5) + `JdbcRepositorioMuestrasIT.ultimasN_...` contra Postgres real.
 - **D3. Decidir si conviene una tercera variable** (candidatos: procesos
   caídos de fondo -- ya es veto absoluto vía ISBD, ¿alerta aparte tiene
-  sentido? -- o utilización de procesos/sesiones).
+  sentido? -- o utilización de procesos/sesiones). Sin resolver todavía.
 
 ## Módulo E — Frontend: piezas pendientes
 - **E1. UI de calibración.** `GET`/`PUT /calibracion` ya existen (ver
