@@ -30,6 +30,14 @@
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Spring Boot 4 modularizó @WebMvcTest fuera de spring-boot-test-autoconfigure
+         (que ahora solo trae json/jdbc): vive en spring-boot-webmvc-test, análogo
+         a como spring-boot-starter-web ya trae spring-boot-webmvc en compile. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
     <!-- Verifica físicamente la regla de dependencia hexagonal (ver referencia de arquitectura) -->
     <dependency>
       <groupId>com.tngtech.archunit</groupId>
