@@ -1,7 +1,12 @@
 import type { Tablespace } from '../api/tipos';
 import { colorTablespace, formatoBytes } from '../utilidades';
 
-export function TablespacesPanel({ tablespaces }: { tablespaces: Tablespace[] }) {
+interface Props {
+  tablespaces: Tablespace[];
+  error?: string | null;
+}
+
+export function TablespacesPanel({ tablespaces, error }: Props) {
   const ordenados = [...tablespaces].sort((a, b) => b.usedPercent - a.usedPercent);
 
   return (
@@ -31,7 +36,9 @@ export function TablespacesPanel({ tablespaces }: { tablespaces: Tablespace[] })
         </span>
       </div>
 
-      {ordenados.length === 0 ? (
+      {error ? (
+        <div className="panel-error">No se pudo cargar tablespaces: {error}</div>
+      ) : ordenados.length === 0 ? (
         <div className="empty">Sin datos de tablespaces todavía.</div>
       ) : (
         <div style={{ marginTop: 6 }}>

@@ -29,6 +29,24 @@ interface Estado {
   sinDatos: boolean;
   error: string | null;
   cargando: boolean;
+  errorHistorico: string | null;
+  errorTablespaces: string | null;
+  errorAlertas: string | null;
+}
+
+/**
+ * El histórico y las otras vistas son complementarias -- si una falla, no
+ * debe tumbar el hero del ISBD, que es lo primero que importa mostrar. Pero
+ * tragarse el error en un array vacío (como antes) es indistinguible de
+ * "de verdad no hay alertas": cada panel necesita saber si está vacío
+ * porque no hay datos o porque su fetch falló, para mostrar cosas distintas.
+ */
+async function cargarSeguro<T>(promesa: Promise<T>, vacio: T): Promise<[T, string | null]> {
+  try {
+    return [await promesa, null];
+  } catch (e) {
+    return [vacio, e instanceof Error ? e.message : String(e)];
+  }
 }
 
 export function App() {
@@ -40,6 +58,9 @@ export function App() {
     sinDatos: false,
     error: null,
     cargando: true,
+    errorHistorico: null,
+    errorTablespaces: null,
+    errorAlertas: null,
   });
   const [muestreando, setMuestreando] = useState(false);
   const [calibracionAbierta, setCalibracionAbierta] = useState(false);
@@ -54,14 +75,19 @@ export function App() {
 
     try {
       const isbd = await obtenerSalud();
-      // El histórico y las otras vistas son complementarias -- si una falla,
-      // no debe tumbar el hero del ISBD, que es lo primero que importa mostrar.
-      const [historico, tablespaces, alertas] = await Promise.all([
-        obtenerHistorico(desde, hasta).catch(() => []),
-        obtenerTablespaces().catch(() => []),
-        obtenerAlertas().catch(() => []),
+      const [
+        [historico, errorHistorico],
+        [tablespaces, errorTablespaces],
+        [alertas, errorAlertas],
+      ] = await Promise.all([
+        cargarSeguro(obtenerHistorico(desde, hasta), [] as Isbd[]),
+        cargarSeguro(obtenerTablespaces(), [] as Tablespace[]),
+        cargarSeguro(obtenerAlertas(), [] as Alerta[]),
       ]);
-      setEstado({ isbd, historico, tablespaces, alertas, sinDatos: false, error: null, cargando: false });
+      setEstado({
+        isbd, historico, tablespaces, alertas, sinDatos: false, error: null, cargando: false,
+        errorHistorico, errorTablespaces, errorAlertas,
+      });
     } catch (e) {
       if (e instanceof SinDatosAunError) {
         setEstado((s) => ({ ...s, sinDatos: true, error: null, cargando: false }));
@@ -130,7 +156,15 @@ export function App() {
         </div>
       )}
 
-      {estado.cargando && <div className="empty">Cargando…</div>}
+      {estado.cargando && (
+        <div className="grid" aria-label="Cargando">
+          <div className="card c5 skeleton" style={{ height: 150 }} />
+          <div className="card c7 skeleton" style={{ height: 150 }} />
+          <div className="card c12 skeleton" style={{ height: 220 }} />
+          <div className="card c6 skeleton" style={{ height: 190 }} />
+          <div className="card c12 skeleton" style={{ height: 150 }} />
+        </div>
+      )}
 
       {!estado.cargando && estado.sinDatos && (
         <div className="card error-panel">
@@ -188,11 +222,15 @@ export function App() {
                 </span>
               </div>
             </div>
-            <HistoricoChart historico={estado.historico} />
+            {estado.errorHistorico ? (
+              <div className="panel-error">No se pudo cargar el histórico: {estado.errorHistorico}</div>
+            ) : (
+              <HistoricoChart historico={estado.historico} />
+            )}
           </section>
 
-          <TablespacesPanel tablespaces={estado.tablespaces} />
-          <AlertasPanel alertas={estado.alertas} />
+          <TablespacesPanel tablespaces={estado.tablespaces} error={estado.errorTablespaces} />
+          <AlertasPanel alertas={estado.alertas} error={estado.errorAlertas} />
         </div>
       )}
     </>

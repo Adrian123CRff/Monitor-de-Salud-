@@ -35,4 +35,11 @@ describe('TablespacesPanel', () => {
 
     expect(screen.getByText(/Total ocupado: 1000 MB/)).toBeInTheDocument();
   });
+
+  it('un error de carga se distingue de "sin datos" -- no debe parecer que todo está en orden', () => {
+    render(<TablespacesPanel tablespaces={[]} error="500 Internal Server Error" />);
+
+    expect(screen.getByText(/No se pudo cargar tablespaces/)).toBeInTheDocument();
+    expect(screen.queryByText(/Sin datos de tablespaces todavía/)).not.toBeInTheDocument();
+  });
 });

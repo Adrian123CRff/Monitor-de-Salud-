@@ -1,18 +1,25 @@
 import type { Alerta } from '../api/tipos';
 import { COLOR_NIVEL, hace } from '../utilidades';
 
+interface Props {
+  alertas: Alerta[];
+  error?: string | null;
+}
+
 /** Solo alertas abiertas (ver GET /alertas) -- ya ordenadas por severidad y duración por el backend. */
-export function AlertasPanel({ alertas }: { alertas: Alerta[] }) {
+export function AlertasPanel({ alertas, error }: Props) {
   return (
     <section className="card c12">
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
         <h2 style={{ fontSize: 15 }}>Alertas abiertas</h2>
         <span className="muted" style={{ fontSize: 12 }}>
-          {alertas.length === 0 ? 'ninguna' : `${alertas.length}`}
+          {error ? 'error' : alertas.length === 0 ? 'ninguna' : `${alertas.length}`}
         </span>
       </div>
       <div style={{ marginTop: 6 }}>
-        {alertas.length === 0 ? (
+        {error ? (
+          <div className="panel-error">No se pudieron cargar las alertas: {error}</div>
+        ) : alertas.length === 0 ? (
           <div className="empty">Sin alertas abiertas -- todo dentro de los umbrales.</div>
         ) : (
           alertas.map((a) => (

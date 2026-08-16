@@ -337,6 +337,31 @@ svg {
   color: var(--ink-2);
 }
 
+.panel-error {
+  font-size: 13px;
+  color: var(--critical);
+  padding: 14px 0;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--wash) 25%, var(--border) 37%, var(--wash) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
 .tile-clicable {
   cursor: pointer;
   border-radius: 8px;

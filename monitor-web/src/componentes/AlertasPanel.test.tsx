@@ -45,4 +45,12 @@ describe('AlertasPanel', () => {
 
     expect(screen.getByText('2')).toBeInTheDocument();
   });
+
+  it('un error de carga se distingue de "sin alertas abiertas" -- no debe parecer que todo está bien', () => {
+    render(<AlertasPanel alertas={[]} error="503 Service Unavailable" />);
+
+    expect(screen.getByText(/No se pudieron cargar las alertas/)).toBeInTheDocument();
+    expect(screen.getByText('error')).toBeInTheDocument();
+    expect(screen.queryByText(/todo dentro de los umbrales/)).not.toBeInTheDocument();
+  });
 });

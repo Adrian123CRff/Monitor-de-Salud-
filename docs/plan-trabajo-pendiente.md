@@ -129,12 +129,25 @@ variables iniciales lo necesitaba.*
   Verificado en vivo: reconstruí el `monitor-api` de docker compose con el
   frontend nuevo y confirmé que el bundle servido trae el código de los
   tres componentes nuevos.
-- **E3. Selector de instancia.** Hoy fijo a `INSTANCIA_ID = 1` en
-  `cliente.ts`. No urge mientras siga ADR 0001 (una sola instancia), pero
-  dejar la UI lista evita un refactor si eso cambia.
-- **E4. Pulido de UX.** Loading skeletons en vez de "Cargando…" plano,
-  manejo de errores más granular por panel (hoy un error de `/tablespaces`
-  no tumba el resto, pero tampoco se distingue visualmente).
+- **E3. Selector de instancia.** Deliberadamente no construido: no hay
+  `GET /instancias` (listado) en el backend -- ver `SaludController`, lo
+  excluye a propósito -- así que una UI de selección hoy no tendría de
+  dónde listar opciones. Construirla ahora sería adelantarse a una
+  necesidad que no existe todavía (ADR 0001: una sola instancia). Revisar
+  si el backend alguna vez expone ese endpoint.
+- [x] **E4. Pulido de UX.** Loading skeleton (`.skeleton`, shimmer con
+  `prefers-reduced-motion` respetado) reemplaza el "Cargando…" plano.
+  Manejo de errores por panel: antes `refrescar()` atrapaba los fallos de
+  histórico/tablespaces/alertas y los convertía en arrays vacíos
+  silenciosos -- indistinguible de "de verdad no hay alertas". Ahora
+  `cargarSeguro()` guarda el mensaje de error junto al valor, y
+  `TablespacesPanel`/`AlertasPanel` reciben un prop `error` opcional que
+  muestra un mensaje distinto (nunca el estado "vacío, todo bien").
+
+  Cobertura: un test nuevo por panel (error vs. vacío) + `App.test.tsx`
+  (nuevo: esqueleto de carga visible mientras `/salud` está pendiente, y
+  un fallo de `/alertas` no tumba el hero ni se confunde con "sin
+  alertas"). Verificado en vivo contra el `monitor-api` de docker compose.
 
 ## Módulo F — Alcance a decidir (no descartado, pausado)
 - **F1. Cadena de bloqueos (`V$SESSION.BLOCKING_SESSION`).** Estaba en el
