@@ -47,6 +47,30 @@ services:
   # copiar el bloque de oracle-monitoreado con otro container_name, otro
   # puerto de host (ej. 1522:1521) y otro volumen.
 
+  # ADR 0004: artefacto único, backend + frontend compilado en el mismo jar
+  # (ver Dockerfile). Las URL de datasource usan los nombres de servicio de
+  # Compose (oracle-monitoreado/historico), no localhost -- "localhost"
+  # dentro de este contenedor sería el propio monitor-api, no el de al lado
+  # (ver el comentario en application.yml sobre MONITOR_DB_URL/HISTORICO_DB_URL).
+  monitor-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: monitor-api
+    ports:
+      - "8080:8080"
+    environment:
+      MONITOR_DB_URL: jdbc:oracle:thin:@//oracle-monitoreado:1521/FREE
+      MONITOR_DB_PASSWORD: ${MONITOR_PASSWORD:-MonitorPass123}
+      HISTORICO_DB_URL: jdbc:postgresql://historico:5432/monitor_historico
+      HISTORICO_DB_USER: ${POSTGRES_USER:-monitor}
+      HISTORICO_DB_PASSWORD: ${POSTGRES_PASSWORD:-HistoricoPass123}
+    depends_on:
+      oracle-monitoreado:
+        condition: service_healthy
+      historico:
+        condition: service_healthy
+
 volumes:
   oracle-data:
   historico-data:

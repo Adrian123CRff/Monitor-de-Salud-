@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-y-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # "mvnw test" recorre TODO el reactor (dominio/aplicacion/infraestructura/api).
+      # monitor-api dispara frontend-maven-plugin durante generate-resources
+      # (descarga su propio Node, corre npm install + npm run build) -- este
+      # paso también valida que TypeScript compile sin errores, sin necesitar
+      # un job de frontend aparte.
+      #
+      # No corre los *IT (Testcontainers/Oracle-Postgres reales): la
+      # convención del proyecto los excluye del "test" por defecto (sin
+      # failsafe plugin, ver referencias/calidad-tests-ci.md) porque este
+      # runner no tiene Oracle disponible. Se corren a mano contra Docker
+      # local -- ver README.
+      - name: Compilar y correr tests unitarios
+        run: ./mvnw test

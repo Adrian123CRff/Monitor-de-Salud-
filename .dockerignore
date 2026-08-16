@@ -1,0 +1,19 @@
+# No hace falta nada de esto dentro del contexto de build -- lo regenera
+# el propio build (target/, node_modules/, resources/static) o no le sirve
+# a la imagen (git, docs, IDE).
+**/target/
+monitor-web/node_modules/
+monitor-web/node/
+monitor-web/dist/
+monitor-web/.vite/
+monitor-web/*.tsbuildinfo
+monitor-api/src/main/resources/static/
+.git/
+.idea/
+*.iml
+.vscode/
+docs/
+*.md
+*.txt
+*.odt
+*.png

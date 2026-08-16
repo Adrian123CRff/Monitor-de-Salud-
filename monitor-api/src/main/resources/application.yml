@@ -22,12 +22,19 @@ monitor:
     # nombre, el arranque de la app "funciona" pero el primer intento real
     # de usar el DataSource revienta con "dataSource or dataSourceClassName
     # or jdbcUrl is required".
+    # Las URL también son overridables: por defecto apuntan a localhost (para
+    # cuando monitor-api corre en el host y Oracle/Postgres corren en Docker
+    # con los puertos publicados, el flujo de desarrollo de todo este
+    # proyecto). Dentro de docker-compose, monitor-api es OTRO contenedor:
+    # "localhost" ahí sería el propio contenedor, no el de al lado -- ver
+    # el override a MONITOR_DB_URL/HISTORICO_DB_URL con los nombres de
+    # servicio de Compose en docker-compose.yml.
     monitoreada:
-      jdbc-url: jdbc:oracle:thin:@//localhost:1521/FREE
+      jdbc-url: ${MONITOR_DB_URL:jdbc:oracle:thin:@//localhost:1521/FREE}
       username: c##monitor
       password: ${MONITOR_DB_PASSWORD:MonitorPass123}
     historico:
-      jdbc-url: jdbc:postgresql://localhost:5432/monitor_historico
+      jdbc-url: ${HISTORICO_DB_URL:jdbc:postgresql://localhost:5432/monitor_historico}
       username: ${HISTORICO_DB_USER:monitor}
       password: ${HISTORICO_DB_PASSWORD:HistoricoPass123}
   muestreo:
