@@ -102,9 +102,22 @@ variables iniciales lo necesitaba.*
   5 tests nuevos en `MuestrearInstanciaServicioTest` (no confirma con 1/3,
   confirma con 2/3, escala sin reconfirmar, no confirma con 2/5, confirma
   con 3/5) + `JdbcRepositorioMuestrasIT.ultimasN_...` contra Postgres real.
-- **D3. Decidir si conviene una tercera variable** (candidatos: procesos
-  caídos de fondo -- ya es veto absoluto vía ISBD, ¿alerta aparte tiene
-  sentido? -- o utilización de procesos/sesiones). Sin resolver todavía.
+- [x] **D3. Tercera variable: `b1_procesos_caidos`.** Binaria y grave,
+  mismo patrón que `datafilesOffline()` -- `AlertasIniciales.procesosCaidos()`.
+  Complementa (no reemplaza) el veto absoluto que `MotorIndicadores` ya
+  aplica sobre IP_fondo: el veto describe solo el ciclo actual, no deja
+  episodio con apertura/cierre en `MONITOR_ALERTAS` ni aparece en el panel
+  de alertas del dashboard.
+
+  Se descartó la otra candidata (utilización de procesos/sesiones): la
+  skill la marca "EWMA α=0.3 + histéresis" -- un tercer mecanismo
+  (suavizado exponencial) no implementado todavía, y que necesitaría datos
+  reales de B1 para elegir un umbral defendible. Calibrarla a ciegas sería
+  peor que no tenerla; se retoma cuando B1 tenga suficiente cobertura.
+
+  Cobertura: test nuevo en `MuestrearInstanciaServicioTest` (proceso de
+  fondo caído abre CRITICO en `MONITOR_ALERTAS`, además del veto del ISBD).
+  Verificado en vivo contra el `monitor-api` de docker compose.
 
 ## Módulo E — Frontend: piezas pendientes
 - [x] **E1. UI de calibración.** `CalibracionPanel` (toggle desde el botón

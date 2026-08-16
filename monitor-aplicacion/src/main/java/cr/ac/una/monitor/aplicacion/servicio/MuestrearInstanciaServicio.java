@@ -90,12 +90,13 @@ import java.util.function.Supplier;
  * nuevo) y ConsultarHistorico, ambos puerto/entrada sin implementación
  * hasta ahora.
  *
- * Alertas (dominio.alertas, MONITOR_ALERTAS): se evalúan las cuatro
+ * Alertas (dominio.alertas, MONITOR_ALERTAS): se evalúan las cinco
  * variables de AlertasIniciales. a2_datafiles_offline y peor_tablespace_pct
  * (por tablespace) solo si el agregado de archivos se pudo leer este ciclo
- * -- mismo criterio que el detalle de tablespaces. p6_sesiones_bloqueadas
- * y m8_over_alloc_delta se evalúan junto con procesos/memoria, cada una
- * condicionada solo a que su propio componente se haya recolectado. Cada
+ * -- mismo criterio que el detalle de tablespaces. b1_procesos_caidos,
+ * p6_sesiones_bloqueadas y m8_over_alloc_delta se evalúan junto con
+ * fondo/procesos/memoria respectivamente, cada una condicionada solo a que
+ * su propio componente se haya recolectado. Cada
  * evaluación consulta la alerta abierta (si hay), calcula el nivel con
  * histéresis (EvaluadorNivel) y deja que MotorAlertas decida abrir/cerrar/
  * escalar (ver ResultadoEvaluacion). Para las variables con confirmación
@@ -157,7 +158,10 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
             muestras.guardar(instancia, m);
             evaluarAlertaSesionesBloqueadas(instancia, m);
         });
-        muestraFondo.ifPresent(m -> muestrasFondo.guardar(instancia, m));
+        muestraFondo.ifPresent(m -> {
+            muestrasFondo.guardar(instancia, m);
+            evaluarAlertaProcesosCaidos(instancia, m);
+        });
         muestraMemoria.ifPresent(m -> {
             muestras.guardar(instancia, m);
             evaluarAlertaPresionPga(instancia, m);
@@ -222,6 +226,18 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
                 ts.usedPercent(), Optional.of(ts.nombre()),
                 valor -> "Tablespace %s al %.1f%%.".formatted(ts.nombre(), valor));
         }
+    }
+
+    /**
+     * Ver AlertasIniciales.procesosCaidos(): binaria y grave, igual que
+     * datafilesOffline(). Complementa el veto absoluto que MotorIndicadores
+     * ya aplica sobre IP_fondo -- ese veto solo describe el ciclo actual, no
+     * queda ningún episodio con apertura/cierre en MONITOR_ALERTAS.
+     */
+    private void evaluarAlertaProcesosCaidos(InstanciaId instancia, Muestra muestraFondo) {
+        evaluarAlerta(instancia, Componente.PROCESOS, AlertasIniciales.procesosCaidos(),
+            muestraFondo.valor("b1_procesos_caidos"), Optional.empty(),
+            valor -> "Procesos de fondo caídos: %d (DBW0/LGWR/CKPT/PMON/SMON).".formatted((int) valor));
     }
 
     /** Ver AlertasIniciales.sesionesBloqueadas(): confirmación 2 de 3. */

@@ -485,6 +485,37 @@ class MuestrearInstanciaServicioTest {
     }
 
     @Test
+    void un_proceso_de_fondo_caido_abre_una_alerta_critica_de_inmediato_ademas_del_veto_del_isbd() {
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+        RecolectorMemoria memoriaSana = instancia -> new Muestra(Componente.MEMORIA, Instant.now(), Map.of(
+            "pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0
+        ), false);
+        RecolectorArchivos archivosSanos = instancia -> new Muestra(Componente.ARCHIVOS, Instant.now(), Map.of(
+            "peor_tablespace_pct", 40.0, "a2_datafiles_offline", 0.0,
+            "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
+        ), false);
+
+        // FONDO_CRITICO ya veta IP_fondo en el ISBD (ver
+        // procesos_criticos_veta_el_isbd_aunque_memoria_y_archivos_esten_perfectos)
+        // -- este test verifica que ADEMÁS abre su propio episodio en MONITOR_ALERTAS.
+        MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_CRITICO,
+            memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+
+        servicio.ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA)).anySatisfy(a -> {
+            assertThat(a.variable()).isEqualTo("b1_procesos_caidos");
+            assertThat(a.componente()).isEqualTo(Componente.PROCESOS);
+            assertThat(a.nivel()).isEqualTo(Nivel.CRITICO);
+            assertThat(a.entidad()).isEmpty();
+        });
+    }
+
+    @Test
     void un_tablespace_que_sube_y_luego_baja_abre_y_cierra_la_alerta_con_histeresis() {
         RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
             "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
