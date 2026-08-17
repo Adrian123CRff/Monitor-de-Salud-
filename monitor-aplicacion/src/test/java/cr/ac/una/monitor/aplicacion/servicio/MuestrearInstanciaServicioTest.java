@@ -498,14 +498,23 @@ class MuestrearInstanciaServicioTest {
             "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
         ), false);
 
-        // FONDO_CRITICO ya veta IP_fondo en el ISBD (ver
-        // procesos_criticos_veta_el_isbd_aunque_memoria_y_archivos_esten_perfectos)
-        // -- este test verifica que ADEMÁS abre su propio episodio en MONITOR_ALERTAS.
+        // Con procesos de USUARIOS sanos (IP_usuarios=100) y solo el proceso de
+        // FONDO caído, el combinado IP_usuarios*0.40 + IP_fondo(0)*0.60 = 40.0
+        // exacto -- el mismo valor que el umbral de veto por defecto. Antes del
+        // arreglo del veto propagado (Indicador.vetado, ver CalculadorComponente/
+        // CombinadorSubIndicadores/MotorIndicadores) esta comparación estricta
+        // (40.0 < 40.0 es falso) NO disparaba el veto: un proceso mandatorio
+        // caído se reportaba SALUDABLE. Este test prueba las dos cosas a la vez:
+        // que se abre el episodio en MONITOR_ALERTAS, y que el ISBD queda CRITICO.
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_CRITICO,
             memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
             repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
 
-        servicio.ejecutar(INSTANCIA);
+        Isbd isbd = servicio.ejecutar(INSTANCIA);
+
+        assertThat(isbd.estado()).isEqualTo(Estado.CRITICO);
+        assertThat(isbd.estadoPorVeto()).isTrue();
+        assertThat(isbd.causas()).anyMatch(c -> c.contains("PROCESOS") && c.contains("vetado"));
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA)).anySatisfy(a -> {
             assertThat(a.variable()).isEqualTo("b1_procesos_caidos");

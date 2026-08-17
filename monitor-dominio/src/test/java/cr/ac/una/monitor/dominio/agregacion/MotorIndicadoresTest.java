@@ -123,6 +123,28 @@ class MotorIndicadoresTest {
     }
 
     @Test
+    void un_indicador_vetado_veta_el_estado_aunque_su_puntuacion_este_alta() {
+        // Distinto del test de "un_componente_critico_veta..." de arriba: ahí el
+        // veto sale de la puntuación numérica (< umbral). Este caso prueba la
+        // marca vetado=true directamente (ver CalculadorComponente/
+        // CombinadorSubIndicadores) -- un Indicador puede llegar aquí con
+        // puntuación ALTA y aun así estar vetado, si viene de combinar un
+        // sub-indicador sano con uno vetado (ver CombinadorSubIndicadoresTest).
+        // 90 está muy por encima del umbral de veto (40): sin la marca, esto
+        // pasaría en verde.
+        Isbd isbd = motor.calcular(ahora,
+            Optional.of(new Indicador(Componente.PROCESOS, 90, true, Map.of())),
+            indicador(Componente.MEMORIA, 90),
+            indicador(Componente.ARCHIVOS, 90),
+            Calibracion.inicial());
+
+        assertThat(isbd.puntuacion()).isCloseTo(90.0, offset(0.01));
+        assertThat(isbd.estado()).isEqualTo(Estado.CRITICO);
+        assertThat(isbd.estadoPorVeto()).isTrue();
+        assertThat(isbd.causas()).anyMatch(c -> c.contains("PROCESOS") && c.contains("vetado"));
+    }
+
+    @Test
     void si_no_se_pudo_recolectar_ningun_componente_no_hay_nada_que_calcular() {
         assertThatIllegalStateException()
             .isThrownBy(() -> motor.calcular(ahora, Optional.empty(), Optional.empty(), Optional.empty(),

@@ -33,22 +33,33 @@ import java.util.Map;
  *
  * Solo cubre un DBWR (DBW0); instancias con múltiples DBWR (DBW1, DBW2...)
  * quedan fuera de esta V1.
+ *
+ * El WHERE name IN (...) es un punto ciego si no casa ninguna fila: un
+ * nombre distinto en otra versión de Oracle (DBW0 vs DBWR, padding en NAME)
+ * haría que COUNT(CASE...) devuelva 0, indistinguible de "los cinco están
+ * sanos" -- exactamente lo que aserta esta clase por accidente si no se
+ * verifica. procesos_encontrados (b1_encontrados) existe solo para ese
+ * chequeo, ver mapear().
  */
 @Component
 public class JdbcRecolectorProcesosFondo implements RecolectorProcesosFondo {
 
+    private static final int PROCESOS_MANDATORIOS_ESPERADOS = 5;
+
     private static final String SQL = """
         SELECT
             bg.procesos_caidos AS b1,
+            bg.procesos_encontrados AS b1_encontrados,
             NVL(ev.lgwr_time_waited, 0) AS lgwr_tw,
             NVL(ev.lgwr_total_waits, 0) AS lgwr_n,
             NVL(ev.dbwr_time_waited, 0) AS dbwr_tw,
             NVL(ev.dbwr_total_waits, 0) AS dbwr_n,
             NVL(ev.ckpt_switch_incompleto, 0) AS ckpt_n
         FROM
-            ( SELECT COUNT(CASE WHEN paddr = '00' THEN 1 END) AS procesos_caidos
+            ( SELECT COUNT(CASE WHEN paddr = '00' THEN 1 END) AS procesos_caidos,
+                     COUNT(*) AS procesos_encontrados
               FROM v$bgprocess
-              WHERE name IN ('DBW0','LGWR','CKPT','PMON','SMON')
+              WHERE TRIM(name) IN ('DBW0','LGWR','CKPT','PMON','SMON')
             ) bg,
             ( SELECT
                 MAX(CASE WHEN event = 'log file sync' THEN time_waited END) AS lgwr_time_waited,
@@ -64,7 +75,7 @@ public class JdbcRecolectorProcesosFondo implements RecolectorProcesosFondo {
     private final JdbcClient jdbc;
 
     public JdbcRecolectorProcesosFondo(@Qualifier("oracleMonitoreado") DataSource ds) {
-        this.jdbc = JdbcClient.create(ds);
+        this.jdbc = JdbcClienteConTimeout.crear(ds);
     }
 
     @Override
@@ -77,6 +88,15 @@ public class JdbcRecolectorProcesosFondo implements RecolectorProcesosFondo {
     }
 
     private Muestra mapear(ResultSet rs, int rowNum) throws SQLException {
+        int encontrados = rs.getInt("b1_encontrados");
+        if (encontrados != PROCESOS_MANDATORIOS_ESPERADOS) {
+            throw new SQLException("V$BGPROCESS solo encontró " + encontrados + " de los "
+                + PROCESOS_MANDATORIOS_ESPERADOS + " procesos mandatorios esperados (DBW0/LGWR/CKPT/PMON/SMON) --"
+                + " nombre distinto en esta versión de Oracle, o de verdad faltan procesos. Ambiguo con"
+                + " 'los cinco están sanos' si se ignora (COUNT(CASE...) daría 0 en ambos casos), así que"
+                + " esta muestra se descarta en vez de arriesgar un falso negativo sobre b1_procesos_caidos.");
+        }
+
         Map<String, Double> valores = new HashMap<>();
         valores.put("b1_procesos_caidos", rs.getDouble("b1"));
         valores.put("b2_lgwr_time_waited_acum", rs.getDouble("lgwr_tw"));

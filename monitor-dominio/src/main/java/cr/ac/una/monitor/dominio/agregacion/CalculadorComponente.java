@@ -24,9 +24,17 @@ import java.util.Map;
  * no admiten "un poco". El promedio ponderado normal se sigue calculando
  * y queda en puntuacionesPorVariable para que el dashboard explique el
  * porqué del 0, pero no es lo que se devuelve como puntuación cuando hay
- * veto. MotorIndicadores no necesita saber nada de esto: su veto de
- * componente existente (puntuación < umbralVetoComponente) atrapa el 0
- * igual que atraparía cualquier otro valor bajo.
+ * veto.
+ *
+ * El Indicador resultante también lleva vetado=true en ese caso -- no basta
+ * con que MotorIndicadores atrape "puntuación < umbralVetoComponente" un
+ * nivel más arriba: cuando este Indicador es un sub-indicador (IP_usuarios/
+ * IP_fondo, ver más abajo) que CombinadorSubIndicadores va a promediar con
+ * otro, el 0 se diluye en una puntuación combinada que puede caer por
+ * encima del umbral según cómo pesen ambos sub-indicadores. vetado=true se
+ * propaga a través de esa combinación (ver CombinadorSubIndicadores) para
+ * que el veto no dependa de una coincidencia aritmética entre pesos y
+ * umbral.
  *
  * IP_usuarios / IP_fondo (ADR 0006) no se separan aquí: este calculador
  * siempre produce un único Indicador por Componente. MuestrearInstanciaServicio
@@ -69,7 +77,7 @@ public final class CalculadorComponente {
         }
 
         double puntuacion = vetoAbsoluto ? 0.0 : sumaPonderada / sumaPesos;
-        return new Indicador(componente, puntuacion, puntuaciones);
+        return new Indicador(componente, puntuacion, vetoAbsoluto, puntuaciones);
     }
 
     private double puntuar(double valor, Umbral u) {

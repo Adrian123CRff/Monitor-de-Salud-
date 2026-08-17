@@ -24,6 +24,13 @@ import java.util.Map;
  * V$LOG / V$LOGFILE (SQL de la skill
  * oracle-vistas-dinamicas/references/sql-archivos.md).
  *
+ * Conexión "oracleMonitoreadoPdb" (FREEPDB1), no "oracleMonitoreado" (CDB$ROOT)
+ * como los otros dos recolectores -- ver DataSourceConfig. Datafiles y
+ * tablespaces son por contenedor: conectado a la raíz, DBA_TABLESPACE_USAGE_METRICS
+ * no da error, solo devuelve los tablespaces de la raíz (SYSTEM/SYSAUX propios,
+ * no los de la aplicación en el PDB) -- el punto ciego exacto que describe la
+ * skill oracle-vistas-dinamicas/references/cdb-pdb.md, "Dónde estoy conectado".
+ *
  * "redundancia_redo" (variable de UmbralesIniciales) = min miembros por
  * grupo de redo (a6_min_miembros): 1 miembro = sin copia.
  *
@@ -63,11 +70,19 @@ public class JdbcRecolectorArchivos implements RecolectorArchivos {
               FROM v$datafile
             ) df,
             ( SELECT
-                ROUND(MAX(used_percent), 2)                            AS peor_tablespace_pct,
-                COUNT(CASE WHEN used_percent > :umbral_riesgo THEN 1 END) AS tablespaces_riesgo,
-                MAX(tablespace_name) KEEP (DENSE_RANK FIRST
-                    ORDER BY used_percent DESC)                        AS peor_tablespace
-              FROM dba_tablespace_usage_metrics
+                ROUND(MAX(u.used_percent), 2)                            AS peor_tablespace_pct,
+                COUNT(CASE WHEN u.used_percent > :umbral_riesgo THEN 1 END) AS tablespaces_riesgo,
+                MAX(u.tablespace_name) KEEP (DENSE_RANK FIRST
+                    ORDER BY u.used_percent DESC)                        AS peor_tablespace
+              FROM dba_tablespace_usage_metrics u
+              JOIN dba_tablespaces t ON t.tablespace_name = u.tablespace_name
+              -- UNDO/TEMPORARY quedan fuera del peor_tablespace_pct que puntúa y
+              -- veta ARCHIVOS: UNDO cuenta extents no expirados como usados (alto
+              -- % en una instancia sana con retención normal) y TEMP no libera el
+              -- high-water mark tras un sort grande -- ambos marcan rutinariamente
+              -- 90-100% sin que pase nada malo. Verificado en vivo (DBA_TABLESPACES.
+              -- CONTENTS = 'PERMANENT'/'TEMPORARY'/'UNDO' contra Oracle Free real).
+              WHERE t.contents = 'PERMANENT'
             ) ts,
             ( SELECT
                 COUNT(CASE WHEN status = 'ONLINE' THEN 1 END) AS tempfiles_online,
@@ -86,17 +101,23 @@ public class JdbcRecolectorArchivos implements RecolectorArchivos {
 
     private static final String SQL_TABLESPACES = """
         SELECT
-            tablespace_name,
-            used_percent,
-            used_space * block_size      AS used_bytes,
-            tablespace_size * block_size AS max_bytes
-        FROM dba_tablespace_usage_metrics
+            u.tablespace_name,
+            u.used_percent,
+            u.used_space * u.block_size      AS used_bytes,
+            u.tablespace_size * u.block_size AS max_bytes
+        FROM dba_tablespace_usage_metrics u
+        JOIN dba_tablespaces t ON t.tablespace_name = u.tablespace_name
+        -- Mismo filtro que el SQL de arriba, y por la misma razón: este detalle
+        -- alimenta MONITOR_TABLESPACE y el bucle de alertas por tablespace
+        -- (MuestrearInstanciaServicio.evaluarAlertas) -- sin filtrar, UNDO/TEMP
+        -- pueden abrir episodios de alerta CRITICO sin que haya un problema real.
+        WHERE t.contents = 'PERMANENT'
         """;
 
     private final JdbcClient jdbc;
 
-    public JdbcRecolectorArchivos(@Qualifier("oracleMonitoreado") DataSource ds) {
-        this.jdbc = JdbcClient.create(ds);
+    public JdbcRecolectorArchivos(@Qualifier("oracleMonitoreadoPdb") DataSource ds) {
+        this.jdbc = JdbcClienteConTimeout.crear(ds);
     }
 
     @Override

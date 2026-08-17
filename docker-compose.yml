@@ -60,7 +60,11 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # Dos URL a la misma instancia -- ver el comentario en application.yml
+      # sobre por qué procesos/memoria/fondo necesitan CDB$ROOT (FREE) y
+      # archivos necesita el PDB (FREEPDB1).
       MONITOR_DB_URL: jdbc:oracle:thin:@//oracle-monitoreado:1521/FREE
+      MONITOR_DB_PDB_URL: jdbc:oracle:thin:@//oracle-monitoreado:1521/FREEPDB1
       MONITOR_DB_PASSWORD: ${MONITOR_PASSWORD:-MonitorPass123}
       HISTORICO_DB_URL: jdbc:postgresql://historico:5432/monitor_historico
       HISTORICO_DB_USER: ${POSTGRES_USER:-monitor}

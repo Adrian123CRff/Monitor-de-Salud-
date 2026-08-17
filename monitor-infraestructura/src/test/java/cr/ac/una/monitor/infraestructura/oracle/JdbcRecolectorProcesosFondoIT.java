@@ -33,6 +33,11 @@ class JdbcRecolectorProcesosFondoIT {
     void recolecta_procesos_de_fondo_reales_de_la_instancia_docker() {
         JdbcRecolectorProcesosFondo recolector = new JdbcRecolectorProcesosFondo(dataSource);
 
+        // Este test, pasando, ya es en sí mismo la prueba positiva del chequeo
+        // procesos_encontrados == 5 (ver JdbcRecolectorProcesosFondo.mapear()):
+        // si el WHERE name IN (...) no hubiera encontrado los 5 procesos
+        // mandatorios contra esta instancia real, recolectar() habría lanzado
+        // RecoleccionFallidaException en vez de devolver la Muestra de abajo.
         Muestra muestra = recolector.recolectar(new InstanciaId(1L));
 
         assertThat(muestra.valores()).containsKeys(

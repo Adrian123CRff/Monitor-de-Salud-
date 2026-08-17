@@ -17,7 +17,7 @@ class JdbcRecolectorArchivosIT {
     @BeforeAll
     static void crearDataSource() {
         dataSource = new HikariDataSource();
-        dataSource.setJdbcUrl("jdbc:oracle:thin:@//localhost:1521/FREE");
+        dataSource.setJdbcUrl("jdbc:oracle:thin:@//localhost:1521/FREEPDB1");
         dataSource.setUsername("c##monitor");
         dataSource.setPassword("MonitorPass123");
         dataSource.setMaximumPoolSize(2);

@@ -77,7 +77,7 @@ public class JdbcRecolectorProcesos implements RecolectorProcesos {
     private final JdbcClient jdbc;
 
     public JdbcRecolectorProcesos(@Qualifier("oracleMonitoreado") DataSource ds) {
-        this.jdbc = JdbcClient.create(ds);
+        this.jdbc = JdbcClienteConTimeout.crear(ds);
     }
 
     @Override

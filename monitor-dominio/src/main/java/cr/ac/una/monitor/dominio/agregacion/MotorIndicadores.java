@@ -29,9 +29,15 @@ import java.util.Optional;
  * Los vetos absolutos de agregacion.md (datafile en RECOVER, datafile
  * OFFLINE, miembro de redo INVALID, tablespace >= 98 %) ya no viven aquí:
  * se resuelven un nivel más abajo, en CalculadorComponente, forzando la
- * puntuación del componente entero a 0 -- este veto de componente
- * (puntuación < umbralVetoComponente) los atrapa igual que atraparía
- * cualquier otro valor bajo, sin necesitar lógica propia.
+ * puntuación del componente entero a 0. El veto de componente de aquí
+ * (puntuación < umbralVetoComponente) los atrapaba en la mayoría de los
+ * casos, pero no siempre: cuando el Indicador viene de combinar
+ * sub-indicadores (IP_usuarios + IP_fondo, ver CombinadorSubIndicadores),
+ * un 0 vetado se puede diluir en un promedio que cae por encima del
+ * umbral según los pesos -- verificado en vivo con la calibración por
+ * defecto (IP=40.0 exacto contra un umbral de 40.0, comparación estricta,
+ * no vetaba). Por eso el chequeo de abajo mira primero i.vetado()
+ * (propagado explícitamente) y solo cae al umbral numérico si no lo está.
  *
  * "Fallo de recolección sostenido" (el otro veto absoluto de agregacion.md)
  * es distinto de lo que hace MuestrearInstanciaServicio.recolectarSeguro:
@@ -66,7 +72,11 @@ public final class MotorIndicadores {
         boolean vetado = false;
         if (cal.vetoHabilitado()) {
             for (Indicador i : presentes.values()) {
-                if (i.puntuacion() < cal.umbralVetoComponente()) {
+                if (i.vetado()) {
+                    causas.add("%s vetado (una variable disparó un veto absoluto, ver detalle del componente)"
+                        .formatted(i.componente()));
+                    vetado = true;
+                } else if (i.puntuacion() < cal.umbralVetoComponente()) {
                     causas.add("%s en %.0f (veto: < %.0f)".formatted(
                         i.componente(), i.puntuacion(), cal.umbralVetoComponente()));
                     vetado = true;

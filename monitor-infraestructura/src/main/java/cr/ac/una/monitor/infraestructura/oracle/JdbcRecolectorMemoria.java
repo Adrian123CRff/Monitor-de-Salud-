@@ -77,7 +77,7 @@ public class JdbcRecolectorMemoria implements RecolectorMemoria {
     private final JdbcClient jdbc;
 
     public JdbcRecolectorMemoria(@Qualifier("oracleMonitoreado") DataSource ds) {
-        this.jdbc = JdbcClient.create(ds);
+        this.jdbc = JdbcClienteConTimeout.crear(ds);
     }
 
     @Override

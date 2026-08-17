@@ -6,6 +6,15 @@ spring:
     locations: classpath:db/migration
     # Apunta al datasource @Primary (historico, ver DataSourceConfig).
     # La instancia Oracle monitoreada NUNCA se migra.
+  task:
+    scheduling:
+      pool:
+        # Spring Boot arranca @EnableScheduling (SchedulingConfig) con UN
+        # hilo por defecto. Con JdbcClienteConTimeout ya no debería quedar
+        # bloqueado para siempre, pero un segundo hilo es barato y evita que
+        # el ciclo de muestreo comparta el único hilo del scheduler con
+        # cualquier otra tarea @Scheduled que se agregue después.
+        size: 2
 
 monitor:
   # Instancia fija (ADR 0001: una sola instancia Oracle en Docker, no
@@ -29,8 +38,21 @@ monitor:
     # "localhost" ahí sería el propio contenedor, no el de al lado -- ver
     # el override a MONITOR_DB_URL/HISTORICO_DB_URL con los nombres de
     # servicio de Compose en docker-compose.yml.
+    # Dos conexiones a la MISMA instancia Oracle, a propósito -- ver el
+    # comentario largo en DataSourceConfig. Resumen: SGA/PGA/límites de
+    # recursos son datos de la instancia completa y solo se ven bien desde
+    # CDB$ROOT (verificado en vivo: "aggregate PGA target parameter" da
+    # 536870912 desde FREE y 0 desde FREEPDB1); los tablespaces/datafiles
+    # son por contenedor y solo se ven bien desde el PDB (verificado en
+    # vivo: DBA_TABLESPACE_USAGE_METRICS devuelve filas distintas y sin
+    # error en ambos, la trampa exacta que describe la skill
+    # oracle-vistas-dinamicas/references/cdb-pdb.md).
     monitoreada:
       jdbc-url: ${MONITOR_DB_URL:jdbc:oracle:thin:@//localhost:1521/FREE}
+      username: c##monitor
+      password: ${MONITOR_DB_PASSWORD:MonitorPass123}
+    monitoreada-pdb:
+      jdbc-url: ${MONITOR_DB_PDB_URL:jdbc:oracle:thin:@//localhost:1521/FREEPDB1}
       username: c##monitor
       password: ${MONITOR_DB_PASSWORD:MonitorPass123}
     historico:
