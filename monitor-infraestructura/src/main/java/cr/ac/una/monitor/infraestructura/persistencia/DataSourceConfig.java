@@ -46,8 +46,16 @@ public class DataSourceConfig {
         ds.setMaximumPoolSize(3);        // pequeño: el monitor no debe pesar sobre la instancia
         ds.setReadOnly(true);            // nunca escribe en la base observada
         ds.setPoolName("monitor-lectura");
-        // Etiqueta las sesiones del monitor en V$SESSION.PROGRAM para poder
-        // excluirlas de p1/p3 (decisión del registro: no contar el propio poller).
+        // Etiqueta las sesiones del monitor en V$SESSION.PROGRAM -- solo para
+        // poder reconocerlas a simple vista si un DBA inspecciona V$SESSION a
+        // mano. NO excluye nada de p1/p3 todavía: ese comentario decía que sí y
+        // era falso (encontrado por auditoría externa, ver docs/) -- p1/p3
+        // salen de V$RESOURCE_LIMIT (CURRENT_UTILIZATION ya viene agregado por
+        // Oracle a nivel de instancia, no hay PROGRAM que filtrar ahí). p4/p5 sí
+        // vienen de V$SESSION y en teoría se podrían filtrar por PROGRAM, pero
+        // son contexto (no puntúan, ver UmbralesIniciales), así que las ~3
+        // sesiones del pool inflando ese número no mueve el ISBD -- no vale la
+        // complejidad todavía.
         ds.addDataSourceProperty("v$session.program", "monitor-salud-oracle");
         // Timeout de socket a nivel del driver, defensa en profundidad además
         // de JdbcTemplate.setQueryTimeout (JdbcClienteConTimeout, monitor-infraestructura.oracle):

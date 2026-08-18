@@ -36,14 +36,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.DoubleFunction;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Caso de uso central: recolecta procesos (usuarios + fondo)/memoria/archivos
@@ -168,12 +171,19 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         });
         muestraArchivos.ifPresent(m -> {
             muestras.guardar(instancia, m);
-            List<DetalleTablespace> detalleTablespaces =
-                recolectarSeguro("tablespaces", () -> archivos.recolectarTablespaces(instancia)).orElse(List.of());
-            if (!detalleTablespaces.isEmpty()) {
-                tablespaces.guardar(instancia, m.momento(), detalleTablespaces);
-            }
-            evaluarAlertas(instancia, m, detalleTablespaces);
+            // Optional, no .orElse(List.of()): hace falta distinguir "la
+            // recolección falló, no sé nada este ciclo" de "recolectó bien, y
+            // ahora mismo no hay tablespaces" -- solo en el primer caso NO se
+            // debe reconciliar alertas abiertas (ver evaluarAlertas), o un
+            // fallo transitorio cerraría alertas reales por error.
+            Optional<List<DetalleTablespace>> detalleTablespaces =
+                recolectarSeguro("tablespaces", () -> archivos.recolectarTablespaces(instancia));
+            detalleTablespaces.ifPresent(detalle -> {
+                if (!detalle.isEmpty()) {
+                    tablespaces.guardar(instancia, m.momento(), detalle);
+                }
+                evaluarAlertas(instancia, m, detalle);
+            });
         });
 
         Optional<Indicador> ipUsuarios = muestraUsuarios.map(
@@ -225,6 +235,31 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
             evaluarAlerta(instancia, Componente.ARCHIVOS, AlertasIniciales.peorTablespacePct(),
                 ts.usedPercent(), Optional.of(ts.nombre()),
                 valor -> "Tablespace %s al %.1f%%.".formatted(ts.nombre(), valor));
+        }
+
+        cerrarAlertasDeTablespacesQueYaNoExisten(instancia, detalle);
+    }
+
+    /**
+     * Encontrado por auditoría externa (ver docs/): una alerta de tablespace
+     * podía quedar abierta para siempre si el tablespace que la disparó
+     * desaparece (renombrado, dropeado) -- el bucle de arriba solo evalúa
+     * los tablespaces que SÍ vienen en la recolección actual, nunca revisa
+     * si algo que estaba abierto ya no aparece. Solo se llama cuando la
+     * recolección de este ciclo tuvo éxito (ver ejecutar(): detalleTablespaces.
+     * ifPresent(...)), nunca cuando falló -- cerrar por un fallo transitorio
+     * sería peor que el bug original.
+     */
+    private void cerrarAlertasDeTablespacesQueYaNoExisten(InstanciaId instancia, List<DetalleTablespace> detalle) {
+        Instant ahora = Instant.now();
+        Set<String> nombresActuales = detalle.stream().map(DetalleTablespace::nombre)
+            .collect(Collectors.toSet());
+        for (Alerta abierta : alertas.abiertas(instancia)) {
+            if (abierta.variable().equals("peor_tablespace_pct")
+                    && abierta.entidad().isPresent()
+                    && !nombresActuales.contains(abierta.entidad().get())) {
+                alertas.cerrar(abierta, ahora);
+            }
         }
     }
 
@@ -340,6 +375,16 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     }
 
     /**
+     * Duration.ZERO cuando no hay muestra anterior: CalculadorDelta.calcular
+     * devuelve sinHistorial() antes de mirar el transcurrido en ese caso (el
+     * Optional vacío se revisa primero), así que el valor exacto no importa,
+     * solo evita un Optional adicional en cada llamada.
+     */
+    private Duration transcurridoDesde(Optional<Muestra> ultima, Muestra actual) {
+        return ultima.map(m -> Duration.between(m.momento(), actual.momento())).orElse(Duration.ZERO);
+    }
+
+    /**
      * Añade m8_over_alloc_delta y m10_multipass_delta comparando contra la
      * última muestra de memoria guardada. Sin historial previo (primera
      * muestra de la instancia), las deltas quedan ausentes -- CalculadorComponente
@@ -347,13 +392,14 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
      */
     private Muestra conDeltas(InstanciaId instancia, Muestra cruda) {
         Optional<Muestra> ultima = muestras.ultima(instancia, Componente.MEMORIA);
+        Duration transcurrido = transcurridoDesde(ultima, cruda);
 
         CalculadorDelta.Resultado deltaOverAlloc = CalculadorDelta.calcular(
             cruda.valor("m8_over_alloc_acum"),
-            ultima.map(m -> m.valores().get("m8_over_alloc_acum")));
+            ultima.map(m -> m.valores().get("m8_over_alloc_acum")), transcurrido);
         CalculadorDelta.Resultado deltaMultipass = CalculadorDelta.calcular(
             cruda.valor("m10_multipass_acum"),
-            ultima.map(m -> m.valores().get("m10_multipass_acum")));
+            ultima.map(m -> m.valores().get("m10_multipass_acum")), transcurrido);
 
         Map<String, Double> valores = new HashMap<>(cruda.valores());
         deltaOverAlloc.delta().ifPresent(d -> valores.put("m8_over_alloc_delta", d));
@@ -373,22 +419,23 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
      */
     private Muestra conDeltasFondo(InstanciaId instancia, Muestra cruda) {
         Optional<Muestra> ultima = muestrasFondo.ultima(instancia);
+        Duration transcurrido = transcurridoDesde(ultima, cruda);
 
         CalculadorDelta.Resultado deltaLgwrTw = CalculadorDelta.calcular(
             cruda.valor("b2_lgwr_time_waited_acum"),
-            ultima.map(m -> m.valores().get("b2_lgwr_time_waited_acum")));
+            ultima.map(m -> m.valores().get("b2_lgwr_time_waited_acum")), transcurrido);
         CalculadorDelta.Resultado deltaLgwrN = CalculadorDelta.calcular(
             cruda.valor("b2_lgwr_total_waits_acum"),
-            ultima.map(m -> m.valores().get("b2_lgwr_total_waits_acum")));
+            ultima.map(m -> m.valores().get("b2_lgwr_total_waits_acum")), transcurrido);
         CalculadorDelta.Resultado deltaDbwrTw = CalculadorDelta.calcular(
             cruda.valor("b3_dbwr_time_waited_acum"),
-            ultima.map(m -> m.valores().get("b3_dbwr_time_waited_acum")));
+            ultima.map(m -> m.valores().get("b3_dbwr_time_waited_acum")), transcurrido);
         CalculadorDelta.Resultado deltaDbwrN = CalculadorDelta.calcular(
             cruda.valor("b3_dbwr_total_waits_acum"),
-            ultima.map(m -> m.valores().get("b3_dbwr_total_waits_acum")));
+            ultima.map(m -> m.valores().get("b3_dbwr_total_waits_acum")), transcurrido);
         CalculadorDelta.Resultado deltaCkpt = CalculadorDelta.calcular(
             cruda.valor("b4_ckpt_switch_incompleto_acum"),
-            ultima.map(m -> m.valores().get("b4_ckpt_switch_incompleto_acum")));
+            ultima.map(m -> m.valores().get("b4_ckpt_switch_incompleto_acum")), transcurrido);
 
         Map<String, Double> valores = new HashMap<>(cruda.valores());
 

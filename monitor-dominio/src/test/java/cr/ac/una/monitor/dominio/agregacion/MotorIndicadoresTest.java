@@ -145,6 +145,38 @@ class MotorIndicadoresTest {
     }
 
     @Test
+    void con_solo_un_componente_presente_el_estado_se_topa_en_advertencia() {
+        // Encontrado por auditoría externa: PROCESOS y ARCHIVOS fallaron el
+        // mismo ciclo, solo MEMORIA respondió y está sano (95). Sin el tope,
+        // el ISBD sería literalmente 95 -> OPTIMO, con dos tercios del
+        // sistema ilegible -- "parcial=true" es fácil de pasar por alto si
+        // solo se mira el semáforo.
+        Isbd isbd = motor.calcular(ahora,
+            Optional.empty(),
+            indicador(Componente.MEMORIA, 95),
+            Optional.empty(),
+            Calibracion.inicial());
+
+        assertThat(isbd.puntuacion()).isCloseTo(95.0, offset(0.01));
+        assertThat(isbd.estado()).isEqualTo(Estado.ADVERTENCIA);
+        assertThat(isbd.estadoPorVeto()).isFalse();
+        assertThat(isbd.parcial()).isTrue();
+        assertThat(isbd.causas()).anyMatch(c -> c.contains("Cobertura insuficiente"));
+    }
+
+    @Test
+    void con_un_solo_componente_presente_que_ya_es_critico_no_hace_falta_topar() {
+        Isbd isbd = motor.calcular(ahora,
+            Optional.empty(),
+            indicador(Componente.MEMORIA, 10),
+            Optional.empty(),
+            Calibracion.inicial());
+
+        assertThat(isbd.estado()).isEqualTo(Estado.CRITICO);
+        assertThat(isbd.causas()).noneMatch(c -> c.contains("Cobertura insuficiente"));
+    }
+
+    @Test
     void si_no_se_pudo_recolectar_ningun_componente_no_hay_nada_que_calcular() {
         assertThatIllegalStateException()
             .isThrownBy(() -> motor.calcular(ahora, Optional.empty(), Optional.empty(), Optional.empty(),

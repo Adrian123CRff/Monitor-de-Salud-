@@ -29,6 +29,7 @@ const isbdEjemplo: Isbd = {
   ia: 91,
   estadoPorVeto: false,
   parcial: false,
+  vetusto: false,
   causas: [],
 };
 

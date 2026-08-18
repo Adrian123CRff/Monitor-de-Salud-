@@ -46,6 +46,15 @@ import java.util.Optional;
  * un corte transitorio de red no debería gritar CRITICO. Un fallo
  * *sostenido* (N ciclos seguidos) sí debería, pero esa lógica de conteo
  * todavía no existe.
+ *
+ * Con solo un componente presente (los otros dos fallaron el mismo ciclo),
+ * el ISBD es literalmente la puntuación de ese único componente -- si
+ * resulta sano, el estado sale OPTIMO con dos tercios del sistema
+ * ilegibles, y "parcial=true" es la única señal de que algo anda mal (fácil
+ * de pasar por alto si solo se mira el semáforo). Encontrado por auditoría
+ * externa (ver docs/): el estado se topa en ADVERTENCIA como máximo en ese
+ * caso -- no CRITICO (sería alarmismo si el único componente que sí
+ * respondió está perfecto), pero tampoco un semáforo verde sin matices.
  */
 public final class MotorIndicadores {
 
@@ -85,6 +94,11 @@ public final class MotorIndicadores {
         }
 
         Estado estado = vetado ? Estado.CRITICO : Estado.desdePuntuacion(puntuacion);
+        if (!vetado && presentes.size() <= 1 && estado.ordinal() < Estado.ADVERTENCIA.ordinal()) {
+            causas.add("Cobertura insuficiente: solo %s pudo recolectarse este ciclo, estado topado en ADVERTENCIA"
+                .formatted(presentes.keySet()));
+            estado = Estado.ADVERTENCIA;
+        }
         return new Isbd(momento, puntuacion, estado, ip, im, ia, vetado, List.copyOf(causas), parcial);
     }
 

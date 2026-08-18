@@ -59,20 +59,37 @@ class JdbcRepositorioAlertasIT {
                 VALUES ('IT-test', 'localhost', 1521, 'FREE', 'CDB')
                 ON CONFLICT (alias) DO NOTHING
                 """);
-            // Sin esto, re-ejecutar esta clase deja alertas "_it" abiertas de la
-            // corrida anterior -- la siguiente corrida encontraría DOS filas
-            // abiertas para la misma (instancia, variable, entidad) y buscarAbierta()
-            // (que espera una sola) reventaría con IncorrectResultSizeDataAccessException.
-            st.execute("""
-                DELETE FROM monitor_alertas
-                WHERE variable IN ('peor_tablespace_pct_it', 'a2_datafiles_offline_it', 'orden_test_it')
-                """);
+            limpiarAlertasDePrueba(st);
         }
     }
 
+    /**
+     * Encontrado por auditoría externa (ver docs/, mismo patrón que
+     * JdbcRepositorioCalibracionIT): INSTANCIA = InstanciaId(1L) es la MISMA
+     * instancia que usa el monitor-api real corriendo en Docker (Postgres
+     * compartido) -- @Order(6)/(7) dejan "a2_datafiles_offline_it" y
+     * "orden_test_it" abiertas a propósito para probar el orden por severidad,
+     * y sin este @AfterAll esas dos alertas de prueba aparecían en
+     * GET /api/v1/instancias/1/alertas del sistema real hasta la siguiente
+     * corrida de este test.
+     */
     @AfterAll
-    static void cerrarDataSource() {
+    static void limpiarYCerrarDataSource() throws Exception {
+        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+            limpiarAlertasDePrueba(st);
+        }
         dataSource.close();
+    }
+
+    private static void limpiarAlertasDePrueba(Statement st) throws Exception {
+        // Sin esto, re-ejecutar esta clase deja alertas "_it" abiertas de la
+        // corrida anterior -- la siguiente corrida encontraría DOS filas
+        // abiertas para la misma (instancia, variable, entidad) y buscarAbierta()
+        // (que espera una sola) reventaría con IncorrectResultSizeDataAccessException.
+        st.execute("""
+            DELETE FROM monitor_alertas
+            WHERE variable IN ('peor_tablespace_pct_it', 'a2_datafiles_offline_it', 'orden_test_it')
+            """);
     }
 
     @Test

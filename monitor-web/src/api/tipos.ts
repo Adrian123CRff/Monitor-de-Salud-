@@ -18,6 +18,11 @@ export interface Isbd {
   ia: number | null;
   estadoPorVeto: boolean;
   parcial: boolean;
+  // true si "momento" ya es más viejo que ~3 ciclos de muestreo (ver
+  // SaludController.MULTIPLICADOR_VETUSTEZ) -- distinto de "parcial", que
+  // dice si ESE ciclo tuvo componentes ausentes. Solo lo calcula GET /salud;
+  // /salud/historico y POST /muestrear siempre lo mandan en false.
+  vetusto: boolean;
   causas: string[];
 }
 

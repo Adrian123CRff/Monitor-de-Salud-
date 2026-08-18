@@ -12,6 +12,7 @@ const base: Isbd = {
   ia: 91,
   estadoPorVeto: false,
   parcial: false,
+  vetusto: false,
   causas: [],
 };
 
@@ -40,6 +41,12 @@ describe('IsbdHero', () => {
     render(<IsbdHero isbd={{ ...base, parcial: true, ia: null }} />);
 
     expect(screen.getByText(/Cálculo parcial/)).toBeInTheDocument();
+  });
+
+  it('avisa cuando el dato esta vetusto (el planificador lleva ciclos sin correr)', () => {
+    render(<IsbdHero isbd={{ ...base, vetusto: true }} />);
+
+    expect(screen.getByText(/no se ha actualizado recientemente/)).toBeInTheDocument();
   });
 
   it('lista las causas cuando hay alguna', () => {

@@ -69,6 +69,32 @@ class SaludControllerTest {
     }
 
     @Test
+    void get_salud_marca_vetusto_cuando_el_ultimo_dato_es_viejo() throws Exception {
+        // isbdSano() trae un "momento" fijo, muy anterior a "ahora" -- exactamente
+        // el escenario de 2.7 (auditoría externa): el planificador dejó de
+        // correr y /salud sigue devolviendo el último Isbd bueno sin avisar.
+        when(consultarSalud.actual(new InstanciaId(1L))).thenReturn(isbdSano());
+
+        mvc.perform(get("/api/v1/instancias/1/salud"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.vetusto").value(true));
+    }
+
+    @Test
+    void get_salud_no_marca_vetusto_cuando_el_ultimo_dato_es_reciente() throws Exception {
+        Isbd reciente = new Isbd(Instant.now(), 82.35, Estado.SALUDABLE,
+            Optional.of(new Indicador(Componente.PROCESOS, 82.0, Map.of())),
+            Optional.of(new Indicador(Componente.MEMORIA, 74.0, Map.of())),
+            Optional.of(new Indicador(Componente.ARCHIVOS, 91.0, Map.of())),
+            false, List.of(), false);
+        when(consultarSalud.actual(new InstanciaId(1L))).thenReturn(reciente);
+
+        mvc.perform(get("/api/v1/instancias/1/salud"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.vetusto").value(false));
+    }
+
+    @Test
     void get_salud_sin_datos_todavia_devuelve_404_con_problem_detail() throws Exception {
         when(consultarSalud.actual(any())).thenThrow(new SaludNoDisponibleException(new InstanciaId(999L)));
 
@@ -95,6 +121,9 @@ class SaludControllerTest {
 
         mvc.perform(post("/api/v1/instancias/1/muestrear"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.puntuacion").value(82.35));
+            .andExpect(jsonPath("$.puntuacion").value(82.35))
+            // POST /muestrear siempre es fresco por definición: nunca vetusto,
+            // sin importar qué tan viejo sea isbdSano().momento().
+            .andExpect(jsonPath("$.vetusto").value(false));
     }
 }

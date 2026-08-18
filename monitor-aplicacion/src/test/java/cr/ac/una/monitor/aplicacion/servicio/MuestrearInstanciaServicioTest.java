@@ -562,6 +562,98 @@ class MuestrearInstanciaServicioTest {
             .noneMatch(a -> a.variable().equals("peor_tablespace_pct"));
     }
 
+    @Test
+    void una_alerta_de_tablespace_se_cierra_si_el_tablespace_ya_no_aparece_en_la_recoleccion() {
+        // Encontrado por auditoría externa: sin reconciliación, una alerta de
+        // tablespace podía quedar abierta para siempre si el tablespace que la
+        // disparó desaparece (renombrado, dropeado) -- el bucle de evaluación
+        // solo mira lo que SÍ viene en la recolección actual.
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+        RecolectorMemoria memoriaSana = instancia -> new Muestra(Componente.MEMORIA, Instant.now(), Map.of(
+            "pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0
+        ), false);
+
+        // Ciclo 1: USERS al 80% abre la alerta.
+        new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
+            archivosConTablespace(0.0, 80.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa)
+            .ejecutar(INSTANCIA);
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .anySatisfy(a -> assertThat(a.entidad()).contains("USERS"));
+
+        // Ciclo 2: USERS ya no existe (renombrado a DATA) -- la recolección
+        // funciona bien, solo que ya no incluye USERS.
+        RecolectorArchivos archivosConOtroTablespace = new RecolectorArchivos() {
+            @Override
+            public Muestra recolectar(InstanciaId instancia) {
+                return new Muestra(Componente.ARCHIVOS, Instant.now(), Map.of(
+                    "peor_tablespace_pct", 40.0, "a2_datafiles_offline", 0.0,
+                    "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
+                ), false);
+            }
+
+            @Override
+            public List<DetalleTablespace> recolectarTablespaces(InstanciaId instancia) {
+                return List.of(new DetalleTablespace("DATA", 40.0, 400.0, 1000.0));
+            }
+        };
+        new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
+            archivosConOtroTablespace, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa)
+            .ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .noneMatch(a -> a.entidad().equals(Optional.of("USERS")));
+    }
+
+    @Test
+    void un_fallo_al_recolectar_tablespaces_no_cierra_las_alertas_ya_abiertas() {
+        // Lo contrario del test anterior: si la recolección FALLA (no si el
+        // tablespace genuinamente desaparece), la reconciliación no debe
+        // correr -- cerrar una alerta real por un fallo transitorio de red
+        // sería peor que el bug original que arregla el test de arriba.
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+        RecolectorMemoria memoriaSana = instancia -> new Muestra(Componente.MEMORIA, Instant.now(), Map.of(
+            "pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0
+        ), false);
+
+        new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
+            archivosConTablespace(0.0, 80.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa)
+            .ejecutar(INSTANCIA);
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .anySatisfy(a -> assertThat(a.entidad()).contains("USERS"));
+
+        RecolectorArchivos archivosQueFallaElDetalle = new RecolectorArchivos() {
+            @Override
+            public Muestra recolectar(InstanciaId instancia) {
+                return new Muestra(Componente.ARCHIVOS, Instant.now(), Map.of(
+                    "peor_tablespace_pct", 80.0, "a2_datafiles_offline", 0.0,
+                    "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
+                ), false);
+            }
+
+            @Override
+            public List<DetalleTablespace> recolectarTablespaces(InstanciaId instancia) {
+                throw new RecoleccionFallidaException(Componente.ARCHIVOS, INSTANCIA,
+                    new RuntimeException("ORA-12541: red caída"));
+            }
+        };
+        new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
+            archivosQueFallaElDetalle, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa)
+            .ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .anySatisfy(a -> assertThat(a.entidad()).contains("USERS"));
+    }
+
     /**
      * A diferencia de repositorioMuestrasFalso (siempre vacío), esta lleva un
      * historial real por componente para poder probar ConfirmadorTemporal --

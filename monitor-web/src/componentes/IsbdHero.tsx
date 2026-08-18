@@ -9,6 +9,11 @@ export function IsbdHero({ isbd }: { isbd: Isbd }) {
       <div className="muted" style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase' }}>
         Índice de salud (ISBD)
       </div>
+      {isbd.vetusto && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 6, color: '#b45309' }}>
+          Este dato no se ha actualizado recientemente -- el monitor podría haber dejado de muestrear.
+        </div>
+      )}
       <div className="hero" style={{ marginTop: 10 }}>
         <div className="fig tnum">{formatoNumero(isbd.puntuacion, 1)}</div>
         <div>

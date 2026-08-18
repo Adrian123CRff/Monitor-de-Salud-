@@ -39,4 +39,39 @@ class CalibracionTest {
 
         assertThat(new Calibracion(pesos, true, 40.0).pesos()).hasSize(3);
     }
+
+    @Test
+    void rechaza_un_peso_en_cero_aunque_la_suma_de_1() {
+        // Encontrado por auditoría externa: {0.0, 0.0, 1.0} sumaba 1.0 y pasaba
+        // -- si el componente con peso 1.0 fallara ese ciclo, MotorIndicadores
+        // dividiría entre una suma de pesos presentes de 0 (NaN). Solo
+        // PROCESOS va en cero aquí (los otros dos suman 1.0 entre ellos) para
+        // que el mensaje sea determinista sin depender del orden de Map.forEach.
+        Map<Componente, Double> pesos = Map.of(
+            Componente.PROCESOS, 0.0, Componente.MEMORIA, 0.4, Componente.ARCHIVOS, 0.6);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new Calibracion(pesos, true, 40.0))
+            .withMessageContaining("PROCESOS")
+            .withMessageContaining("mayor que 0");
+    }
+
+    @Test
+    void rechaza_un_peso_negativo_aunque_la_suma_de_1() {
+        Map<Componente, Double> pesos = Map.of(
+            Componente.PROCESOS, -0.30, Componente.MEMORIA, 0.65, Componente.ARCHIVOS, 0.65);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new Calibracion(pesos, true, 40.0))
+            .withMessageContaining("mayor que 0");
+    }
+
+    @Test
+    void rechaza_una_calibracion_que_no_trae_los_tres_componentes() {
+        Map<Componente, Double> pesos = Map.of(Componente.PROCESOS, 0.5, Componente.MEMORIA, 0.5);
+
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new Calibracion(pesos, true, 40.0))
+            .withMessageContaining("un peso para cada componente");
+    }
 }
