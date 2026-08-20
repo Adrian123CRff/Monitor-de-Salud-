@@ -16,6 +16,14 @@ export interface Isbd {
   ip: number | null;
   im: number | null;
   ia: number | null;
+  // El Estado que le corresponde a cada puntuación, resuelto en el backend con
+  // la MISMA escala del §18 que usa el ISBD global (Estado.desdePuntuacion).
+  // No se recalcula aquí a propósito: replicar los cortes 90/75/60/40 en el
+  // cliente dejaría la escala definida en dos sitios. null cuando el
+  // componente no se recolectó.
+  estadoIp: Estado | null;
+  estadoIm: Estado | null;
+  estadoIa: Estado | null;
   estadoPorVeto: boolean;
   parcial: boolean;
   // true si "momento" ya es más viejo que ~3 ciclos de muestreo (ver

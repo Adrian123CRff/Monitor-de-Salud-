@@ -10,6 +10,9 @@ const isbd: Isbd = {
   ip: 82,
   im: 74,
   ia: 91,
+  estadoIp: 'SALUDABLE',
+  estadoIm: 'ADVERTENCIA',
+  estadoIa: 'OPTIMO',
   estadoPorVeto: false,
   parcial: false,
   vetusto: false,
@@ -30,5 +33,40 @@ describe('IndicadoresTiles', () => {
     fireEvent.click(screen.getByText('Memoria · IM'));
 
     expect(onSeleccionar).toHaveBeenCalledWith('MEMORIA');
+  });
+});
+
+describe('IndicadoresTiles -- color semantico (pedido del profesor)', () => {
+  it('cada tile toma el color del Estado que mando el backend, no una paleta fija', () => {
+    const mixto: Isbd = {
+      ...isbd,
+      ip: 20,
+      im: 80,
+      ia: 95,
+      estadoIp: 'CRITICO',
+      estadoIm: 'SALUDABLE',
+      estadoIa: 'OPTIMO',
+    };
+
+    render(<IndicadoresTiles actual={mixto} historico={[]} />);
+
+    // El chip nombra el estado, asi el color no es la unica senal (accesibilidad).
+    expect(screen.getByText('Crítico')).toBeInTheDocument();
+    expect(screen.getByText('Saludable')).toBeInTheDocument();
+    expect(screen.getByText('Óptimo')).toBeInTheDocument();
+
+    const critico = screen.getByText('20').closest('.tile');
+    expect(critico?.querySelector('.swatch')).toHaveStyle({ background: 'var(--critical)' });
+  });
+
+  it('un componente sin datos queda en gris, no en un color de la escala', () => {
+    const sinMemoria: Isbd = { ...isbd, im: null, estadoIm: null };
+
+    render(<IndicadoresTiles actual={sinMemoria} historico={[]} />);
+
+    const tileMemoria = screen.getByText('—').closest('.tile');
+    expect(tileMemoria?.querySelector('.swatch')).toHaveStyle({ background: 'var(--muted)' });
+    // Sin estado no hay chip: no se le inventa una etiqueta.
+    expect(tileMemoria?.querySelector('.chip')).toBeNull();
   });
 });

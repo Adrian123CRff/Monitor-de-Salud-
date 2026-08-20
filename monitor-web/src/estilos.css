@@ -438,3 +438,45 @@ svg {
 .detalle-valor {
   text-align: right;
 }
+
+/* Controles de la vista general: buscar por nombre y ordenar por estado.
+   Pedido del profesor tras la primera presentacion. */
+.controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.controles .buscador {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.controles .buscador::placeholder { color: var(--muted); }
+.controles .buscador:focus-visible,
+.controles select:focus-visible {
+  outline: 2px solid var(--s1);
+  outline-offset: 1px;
+}
+.controles .orden {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.controles select {
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}

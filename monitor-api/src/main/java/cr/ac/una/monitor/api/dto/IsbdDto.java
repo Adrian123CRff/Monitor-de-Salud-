@@ -1,5 +1,6 @@
 package cr.ac.una.monitor.api.dto;
 
+import cr.ac.una.monitor.dominio.modelo.Estado;
 import cr.ac.una.monitor.dominio.modelo.Indicador;
 import cr.ac.una.monitor.dominio.modelo.Isbd;
 
@@ -12,6 +13,13 @@ import java.util.List;
  * dominio"). ip/im/ia quedan null cuando el componente no se pudo
  * recolectar ese ciclo (ver Isbd.parcial): el desglose por variable no
  * viaja aquí, monitor_indices solo guarda el agregado.
+ *
+ * estadoIp/estadoIm/estadoIa: el mismo número (85) tiene que verse igual de
+ * grave en el tile del componente que en el ISBD global, así que la escala
+ * se resuelve UNA sola vez, en el dominio (Estado.desdePuntuacion), y viaja
+ * ya resuelta. La alternativa -- que el frontend replique los cortes
+ * 90/75/60/40 -- deja la escala del §18 definida en dos sitios que pueden
+ * separarse sin que nada avise.
  *
  * vetusto (encontrado por auditoría externa, ver docs/): "parcial" dice si
  * ESTE ciclo tuvo componentes ausentes -- no dice nada de si el planificador
@@ -32,6 +40,9 @@ public record IsbdDto(
         Double ip,
         Double im,
         Double ia,
+        String estadoIp,
+        String estadoIm,
+        String estadoIa,
         boolean estadoPorVeto,
         boolean parcial,
         boolean vetusto,
@@ -49,9 +60,17 @@ public record IsbdDto(
             isbd.ip().map(Indicador::puntuacion).orElse(null),
             isbd.im().map(Indicador::puntuacion).orElse(null),
             isbd.ia().map(Indicador::puntuacion).orElse(null),
+            estadoDe(isbd.ip()),
+            estadoDe(isbd.im()),
+            estadoDe(isbd.ia()),
             isbd.estadoPorVeto(),
             isbd.parcial(),
             vetusto,
             isbd.causas());
+    }
+
+    /** null cuando el componente no se recolectó: sin puntuación no hay estado que mostrar. */
+    private static String estadoDe(java.util.Optional<Indicador> indicador) {
+        return indicador.map(i -> Estado.desdePuntuacion(i.puntuacion()).name()).orElse(null);
     }
 }

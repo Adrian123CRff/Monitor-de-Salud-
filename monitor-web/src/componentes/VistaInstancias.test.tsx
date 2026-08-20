@@ -17,6 +17,9 @@ const isbdSano: Isbd = {
   ip: 100,
   im: 90,
   ia: 93.5,
+  estadoIp: 'OPTIMO',
+  estadoIm: 'OPTIMO',
+  estadoIa: 'OPTIMO',
   estadoPorVeto: false,
   parcial: false,
   vetusto: false,
@@ -68,5 +71,83 @@ describe('VistaInstancias', () => {
     render(<VistaInstancias onSeleccionar={() => {}} />);
 
     await waitFor(() => expect(screen.getByText(/No se pudo conectar con el backend/)).toBeInTheDocument());
+  });
+});
+
+describe('VistaInstancias -- busqueda y orden (pedido del profesor)', () => {
+  const conSalud = (id: number, alias: string, puntuacion: number, estado: Isbd['estado']): ResumenInstancia => ({
+    id,
+    alias,
+    salud: { ...isbdSano, puntuacion, estado },
+  });
+
+  const tres: ResumenInstancia[] = [
+    conSalud(1, 'ventas-produccion', 95, 'OPTIMO'),
+    conSalud(2, 'nomina-critica', 22, 'CRITICO'),
+    conSalud(3, 'bodega-pruebas', 68, 'ADVERTENCIA'),
+  ];
+
+  const aliasEnPantalla = () =>
+    screen.getAllByRole('button').map((b) => b.querySelector('.lab')?.textContent);
+
+  it('ordena peor primero por defecto, sin importar el orden que devuelva la API', async () => {
+    vi.mocked(obtenerInstancias).mockResolvedValue(tres);
+
+    render(<VistaInstancias onSeleccionar={() => {}} />);
+    await waitFor(() => expect(screen.getByText('nomina-critica')).toBeInTheDocument());
+
+    expect(aliasEnPantalla()).toEqual(['nomina-critica', 'bodega-pruebas', 'ventas-produccion']);
+  });
+
+  it('invierte el orden al elegir "mejor primero"', async () => {
+    vi.mocked(obtenerInstancias).mockResolvedValue(tres);
+
+    render(<VistaInstancias onSeleccionar={() => {}} />);
+    await waitFor(() => expect(screen.getByText('nomina-critica')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Ordenar por estado'), {
+      target: { value: 'MEJOR_PRIMERO' },
+    });
+
+    expect(aliasEnPantalla()).toEqual(['ventas-produccion', 'bodega-pruebas', 'nomina-critica']);
+  });
+
+  it('una instancia sin datos va al final, no se le inventa un estado', async () => {
+    vi.mocked(obtenerInstancias).mockResolvedValue([
+      { id: 9, alias: 'recien-agregada', salud: null },
+      ...tres,
+    ]);
+
+    render(<VistaInstancias onSeleccionar={() => {}} />);
+    await waitFor(() => expect(screen.getByText('recien-agregada')).toBeInTheDocument());
+
+    expect(aliasEnPantalla().at(-1)).toBe('recien-agregada');
+  });
+
+  it('la busqueda filtra por nombre, sin distinguir mayusculas', async () => {
+    vi.mocked(obtenerInstancias).mockResolvedValue(tres);
+
+    render(<VistaInstancias onSeleccionar={() => {}} />);
+    await waitFor(() => expect(screen.getByText('nomina-critica')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Buscar base de datos por nombre'), {
+      target: { value: 'NOMINA' },
+    });
+
+    expect(screen.getByText('nomina-critica')).toBeInTheDocument();
+    expect(screen.queryByText('ventas-produccion')).not.toBeInTheDocument();
+  });
+
+  it('si la busqueda no encuentra nada lo dice, en vez de mostrar la lista vacia', async () => {
+    vi.mocked(obtenerInstancias).mockResolvedValue(tres);
+
+    render(<VistaInstancias onSeleccionar={() => {}} />);
+    await waitFor(() => expect(screen.getByText('nomina-critica')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Buscar base de datos por nombre'), {
+      target: { value: 'no-existe' },
+    });
+
+    expect(screen.getByText(/Ninguna base de datos coincide/)).toBeInTheDocument();
   });
 });

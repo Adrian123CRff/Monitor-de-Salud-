@@ -20,6 +20,20 @@ export const ETIQUETA_ESTADO: Record<Estado, string> = {
   CRITICO: 'Crítico',
 };
 
+/**
+ * Gravedad de cada Estado, de sano (0) a crítico (4) -- el mismo orden en que
+ * los declara Estado.java. Sirve para ordenar la vista general por riesgo sin
+ * depender de la puntuación: una instancia sin datos todavía no tiene
+ * puntuación, pero sí tiene que caer en algún lado del orden.
+ */
+export const GRAVEDAD_ESTADO: Record<Estado, number> = {
+  OPTIMO: 0,
+  SALUDABLE: 1,
+  ADVERTENCIA: 2,
+  DEGRADADO: 3,
+  CRITICO: 4,
+};
+
 export const COLOR_NIVEL: Record<Nivel, string> = {
   ADVERTENCIA: 'var(--warning)',
   ALTO: 'var(--serious)',
