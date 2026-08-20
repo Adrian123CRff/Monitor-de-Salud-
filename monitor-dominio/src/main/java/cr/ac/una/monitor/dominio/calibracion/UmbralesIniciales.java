@@ -1,6 +1,7 @@
 package cr.ac.una.monitor.dominio.calibracion;
 
 import java.util.List;
+import java.util.Map;
 
 import static cr.ac.una.monitor.dominio.calibracion.TipoUmbral.LINEAL_DIRECTA;
 import static cr.ac.una.monitor.dominio.calibracion.TipoUmbral.LINEAL_INVERTIDA;
@@ -33,6 +34,31 @@ public final class UmbralesIniciales {
     public static final double PESO_IP_FONDO = 0.60;
 
     private UmbralesIniciales() {
+    }
+
+    /**
+     * Los cuatro grupos juntos, indexados igual que los pide
+     * MuestrearInstanciaServicio.
+     *
+     * Desde que los umbrales viven en tabla (monitor_umbral_puntuacion, ver
+     * RepositorioUmbrales y ADR 0007) esta clase dejó de ser la fuente en
+     * producción y pasó a ser dos cosas: la SEMILLA de esa tabla (migración
+     * V8, que copia exactamente estos valores al perfil ESTANDAR) y el
+     * RESPALDO en código si la tabla no responde o está vacía -- mismo patrón
+     * que Calibracion.inicial() frente a monitor_calibracion.
+     *
+     * Si cambiás un valor de aquí, la tabla ya sembrada NO se entera: Flyway
+     * no vuelve a correr V8. Para cambiar umbrales en una base existente hay
+     * que hacer UPDATE sobre la tabla, que es justamente el punto de haberlos
+     * movido ahí. JdbcRepositorioUmbralesIT compara ambas copias para que no
+     * diverjan en silencio.
+     */
+    public static Map<GrupoUmbral, List<Umbral>> porGrupo() {
+        return Map.of(
+            GrupoUmbral.PROCESOS_USUARIOS, procesosUsuarios(),
+            GrupoUmbral.PROCESOS_FONDO, procesosFondo(),
+            GrupoUmbral.MEMORIA, memoria(),
+            GrupoUmbral.ARCHIVOS, archivos());
     }
 
     /**

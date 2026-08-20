@@ -5,8 +5,10 @@ import java.util.Optional;
 /**
  * Configuración de normalización de una variable derivada (util_procesos_pct,
  * peor_tablespace_pct, etc. -- ver catalogo-variables.md "Variables derivadas").
- * Vive en tabla (monitor_umbral), no en código; estas son valores iniciales
- * de diseño (ver UmbralesIniciales), no resultados de calibración.
+ * Vive en tabla (monitor_umbral_puntuacion, ver RepositorioUmbrales y ADR
+ * 0007), no en código. UmbralesIniciales es la semilla de esa tabla y el
+ * respaldo si no responde; sus valores son de diseño, no resultados de
+ * calibración.
  *
  * Dos mecanismos de veto absoluto (ver CalculadorComponente y skill
  * diseno-de-indicadores / references/agregacion.md, "Parte 2 -- Reglas de

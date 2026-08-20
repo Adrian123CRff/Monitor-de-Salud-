@@ -11,9 +11,14 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioIndices;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioTablespaces;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioUmbrales;
 import cr.ac.una.monitor.dominio.alertas.Alerta;
 import cr.ac.una.monitor.dominio.alertas.Nivel;
 import cr.ac.una.monitor.dominio.calibracion.Calibracion;
+import cr.ac.una.monitor.dominio.calibracion.GrupoUmbral;
+import cr.ac.una.monitor.dominio.calibracion.TipoUmbral;
+import cr.ac.una.monitor.dominio.calibracion.Umbral;
+import cr.ac.una.monitor.dominio.calibracion.UmbralesIniciales;
 import cr.ac.una.monitor.dominio.modelo.Componente;
 import cr.ac.una.monitor.dominio.modelo.DetalleTablespace;
 import cr.ac.una.monitor.dominio.modelo.InstanciaId;
@@ -177,6 +182,15 @@ class MuestrearInstanciaServicioTest {
         }
     };
 
+    /**
+     * Devuelve exactamente lo que la migración V8 siembra en el perfil
+     * ESTANDAR, así que todas las puntuaciones esperadas de esta clase siguen
+     * valiendo igual que cuando los umbrales estaban hardcodeados en el
+     * servicio. Que la tabla real coincida con esta semilla es lo que prueba
+     * JdbcRepositorioUmbralesIT contra Postgres.
+     */
+    private final RepositorioUmbrales umbralesFalsos = instancia -> UmbralesIniciales.porGrupo();
+
     @Test
     void una_instancia_totalmente_sana_da_isbd_optimo_sin_veto() {
         RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
@@ -204,7 +218,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
             archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso,
-            calibracionFalsa);
+            calibracionFalsa, umbralesFalsos);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -234,7 +248,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosCriticos, FONDO_CRITICO,
             memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -294,7 +308,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaConPresionDePga, archivosSanos, repositorioConHistorial, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -357,7 +371,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, fondoConEsperas,
             memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioFondoConHistorial,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -388,7 +402,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaCaida, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -434,7 +448,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
             archivosConDetalle, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso,
-            calibracionFalsa);
+            calibracionFalsa, umbralesFalsos);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -472,7 +486,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
             archivosConTablespace(1.0, 10.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -482,6 +496,103 @@ class MuestrearInstanciaServicioTest {
             assertThat(a.nivel()).isEqualTo(Nivel.CRITICO);
             assertThat(a.entidad()).isEmpty();
         });
+    }
+
+    /**
+     * Regresión: al añadir la reconciliación de tablespaces huérfanos, toda la
+     * evaluación de alertas de ARCHIVOS quedó dentro del ifPresent del detalle
+     * por tablespace. Pero a2_datafiles_offline sale del AGREGADO, no del
+     * detalle -- así que un fallo de DBA_TABLESPACE_USAGE_METRICS (consulta
+     * aparte, más pesada, con timeout de 10s) se tragaba en silencio la alerta
+     * de un datafile OFFLINE. El veto del ISBD seguía disparando, lo que hacía
+     * el bug aún más difícil de ver: el dashboard mostraba CRITICO, pero el
+     * panel de alertas no tenía nada y MONITOR_ALERTAS quedaba sin episodio.
+     */
+    @Test
+    void un_datafile_offline_abre_alerta_aunque_falle_la_recoleccion_de_tablespaces() {
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+        RecolectorMemoria memoriaSana = instancia -> new Muestra(Componente.MEMORIA, Instant.now(), Map.of(
+            "pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0
+        ), false);
+
+        // El agregado SÍ se lee (y trae el datafile offline); el detalle por
+        // tablespace es el que falla.
+        RecolectorArchivos agregadoOkDetalleCaido = new RecolectorArchivos() {
+            @Override
+            public Muestra recolectar(InstanciaId instancia) {
+                return new Muestra(Componente.ARCHIVOS, Instant.now(), Map.of(
+                    "peor_tablespace_pct", 40.0, "a2_datafiles_offline", 1.0,
+                    "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
+                ), false);
+            }
+
+            @Override
+            public List<DetalleTablespace> recolectarTablespaces(InstanciaId instancia) {
+                throw new RecoleccionFallidaException(
+                    Componente.ARCHIVOS, instancia, new RuntimeException("ORA-01013: timeout"));
+            }
+        };
+
+        new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana, agregadoOkDetalleCaido,
+            repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos).ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA)).anySatisfy(a -> {
+            assertThat(a.variable()).isEqualTo("a2_datafiles_offline");
+            assertThat(a.nivel()).isEqualTo(Nivel.CRITICO);
+        });
+    }
+
+    /**
+     * La otra mitad de la misma decisión: las alertas POR TABLESPACE sí
+     * dependen del detalle, y un fallo de recolección no debe cerrarlas
+     * (cerrarAlertasDeTablespacesQueYaNoExisten no se llama en ese caso).
+     */
+    @Test
+    void un_fallo_al_recolectar_tablespaces_no_cierra_las_alertas_de_tablespace_ya_abiertas() {
+        RecolectorProcesos procesosSanos = instancia -> new Muestra(Componente.PROCESOS, Instant.now(), Map.of(
+            "util_procesos_pct", 30.0, "util_sesiones_pct", 25.0,
+            "p6_sesiones_bloqueadas", 0.0, "bloqueo_max_seg", 0.0
+        ), false);
+        RecolectorMemoria memoriaSana = instancia -> new Muestra(Componente.MEMORIA, Instant.now(), Map.of(
+            "pga_uso_pct", 60.0, "m8_over_alloc_acum", 1000.0, "m10_multipass_acum", 0.0
+        ), false);
+
+        // Ciclo 1: USERS al 80% abre su alerta.
+        new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
+            archivosConTablespace(0.0, 80.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso,
+            calibracionFalsa, umbralesFalsos).ejecutar(INSTANCIA);
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .anyMatch(a -> a.variable().equals("peor_tablespace_pct"));
+
+        // Ciclo 2: el detalle no responde. La alerta debe seguir abierta --
+        // "no sé" no es lo mismo que "el tablespace ya no existe".
+        RecolectorArchivos detalleCaido = new RecolectorArchivos() {
+            @Override
+            public Muestra recolectar(InstanciaId instancia) {
+                return new Muestra(Componente.ARCHIVOS, Instant.now(), Map.of(
+                    "peor_tablespace_pct", 80.0, "a2_datafiles_offline", 0.0,
+                    "a7_archivos_invalidos", 0.0, "a8_archivos_recover", 0.0, "redundancia_redo", 2.0
+                ), false);
+            }
+
+            @Override
+            public List<DetalleTablespace> recolectarTablespaces(InstanciaId instancia) {
+                throw new RecoleccionFallidaException(
+                    Componente.ARCHIVOS, instancia, new RuntimeException("ORA-01013: timeout"));
+            }
+        };
+
+        new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana, detalleCaido,
+            repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos).ejecutar(INSTANCIA);
+
+        assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
+            .anyMatch(a -> a.variable().equals("peor_tablespace_pct"));
     }
 
     @Test
@@ -508,7 +619,7 @@ class MuestrearInstanciaServicioTest {
         // que se abre el episodio en MONITOR_ALERTAS, y que el ISBD queda CRITICO.
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_CRITICO,
             memoriaSana, archivosSanos, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         Isbd isbd = servicio.ejecutar(INSTANCIA);
 
@@ -536,7 +647,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
             archivosConTablespace(0.0, 80.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
         servicio.ejecutar(INSTANCIA);
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
@@ -546,7 +657,7 @@ class MuestrearInstanciaServicioTest {
         // salida (70) -- con histéresis, sigue abierta (no debería cerrar todavía).
         MuestrearInstanciaServicio servicioZonaMuerta = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaSana, archivosConTablespace(0.0, 72.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
         servicioZonaMuerta.ejecutar(INSTANCIA);
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
@@ -555,7 +666,7 @@ class MuestrearInstanciaServicioTest {
         // Baja de la salida (70): ahora sí cierra.
         MuestrearInstanciaServicio servicioNormal = new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO,
             memoriaSana, archivosConTablespace(0.0, 50.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
         servicioNormal.ejecutar(INSTANCIA);
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
@@ -579,7 +690,7 @@ class MuestrearInstanciaServicioTest {
         // Ciclo 1: USERS al 80% abre la alerta.
         new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
             archivosConTablespace(0.0, 80.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa)
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos)
             .ejecutar(INSTANCIA);
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
             .anySatisfy(a -> assertThat(a.entidad()).contains("USERS"));
@@ -602,7 +713,7 @@ class MuestrearInstanciaServicioTest {
         };
         new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
             archivosConOtroTablespace, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa)
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos)
             .ejecutar(INSTANCIA);
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
@@ -625,7 +736,7 @@ class MuestrearInstanciaServicioTest {
 
         new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
             archivosConTablespace(0.0, 80.0), repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa)
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos)
             .ejecutar(INSTANCIA);
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
             .anySatisfy(a -> assertThat(a.entidad()).contains("USERS"));
@@ -647,7 +758,7 @@ class MuestrearInstanciaServicioTest {
         };
         new MuestrearInstanciaServicio(procesosSanos, FONDO_SANO, memoriaSana,
             archivosQueFallaElDetalle, repositorioMuestrasFalso, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa)
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos)
             .ejecutar(INSTANCIA);
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
@@ -714,7 +825,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(2.0),
             FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS, repositorio, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -733,7 +844,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(2.0),
             FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS, repositorio, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -753,14 +864,14 @@ class MuestrearInstanciaServicioTest {
         // Ciclo 1: confirma 2 de 3 y abre en ADVERTENCIA (igual que el test anterior).
         new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(2.0), FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS,
             repositorio, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
-            repositorioAlertasFalso, calibracionFalsa).ejecutar(INSTANCIA);
+            repositorioAlertasFalso, calibracionFalsa, umbralesFalsos).ejecutar(INSTANCIA);
 
         // Ciclo 2: una sola lectura en 6 (CRITICO) -- sin ninguna otra lectura
         // adicional que la confirme "2 de 3" en ese nivel. Como el episodio ya
         // estaba abierto (nivelAnterior != NORMAL), escala igual, de inmediato.
         new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(6.0), FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS,
             repositorio, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
-            repositorioAlertasFalso, calibracionFalsa).ejecutar(INSTANCIA);
+            repositorioAlertasFalso, calibracionFalsa, umbralesFalsos).ejecutar(INSTANCIA);
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA)).anySatisfy(a -> {
             assertThat(a.variable()).isEqualTo("p6_sesiones_bloqueadas");
@@ -783,14 +894,14 @@ class MuestrearInstanciaServicioTest {
         // Ciclo 1: confirma 2 de 3 y abre en ADVERTENCIA.
         new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(2.0), FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS,
             repositorio, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
-            repositorioAlertasFalso, calibracionFalsa).ejecutar(INSTANCIA);
+            repositorioAlertasFalso, calibracionFalsa, umbralesFalsos).ejecutar(INSTANCIA);
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
             .anyMatch(a -> a.variable().equals("p6_sesiones_bloqueadas"));
 
         // Ciclo 2: el bloqueo se libera, vuelve a 0.
         new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0), FONDO_SANO, MEMORIA_SANA, ARCHIVOS_SANOS,
             repositorio, repositorioMuestrasFondoFalso, repositorioTablespacesFalso, repositorioIndicesFalso,
-            repositorioAlertasFalso, calibracionFalsa).ejecutar(INSTANCIA);
+            repositorioAlertasFalso, calibracionFalsa, umbralesFalsos).ejecutar(INSTANCIA);
 
         assertThat(repositorioAlertasFalso.abiertas(INSTANCIA))
             .noneMatch(a -> a.variable().equals("p6_sesiones_bloqueadas"));
@@ -815,7 +926,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0),
             FONDO_SANO, memoriaConPresion, ARCHIVOS_SANOS, repositorio, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -840,7 +951,7 @@ class MuestrearInstanciaServicioTest {
 
         MuestrearInstanciaServicio servicio = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0),
             FONDO_SANO, memoriaConPresion, ARCHIVOS_SANOS, repositorio, repositorioMuestrasFondoFalso,
-            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa);
+            repositorioTablespacesFalso, repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesFalsos);
 
         servicio.ejecutar(INSTANCIA);
 
@@ -848,5 +959,61 @@ class MuestrearInstanciaServicioTest {
             assertThat(a.variable()).isEqualTo("m8_over_alloc_delta");
             assertThat(a.nivel()).isEqualTo(Nivel.ADVERTENCIA);
         });
+    }
+
+    @Test
+    void los_umbrales_de_la_tabla_mandan_sobre_los_valores_de_diseno() {
+        // Mismo dato crudo (pga_uso_pct = 60) que en el test de instancia sana,
+        // donde IM daba 100 con los umbrales de diseño (ok=90, critico=130).
+        // Con estos umbrales -- los que traería una calibración real de una base
+        // pequeña -- 60 ya está en zona crítica y IM cae a 0. Si el servicio
+        // siguiera leyendo UmbralesIniciales, este test daría 100.
+        RepositorioUmbrales umbralesCalibrados = instancia -> Map.of(
+            GrupoUmbral.PROCESOS_USUARIOS, UmbralesIniciales.procesosUsuarios(),
+            GrupoUmbral.PROCESOS_FONDO, UmbralesIniciales.procesosFondo(),
+            GrupoUmbral.MEMORIA, List.of(
+                Umbral.lineal("pga_uso_pct", TipoUmbral.LINEAL_INVERTIDA, 30, 50, 0.4)),
+            GrupoUmbral.ARCHIVOS, UmbralesIniciales.archivos());
+
+        Isbd isbd = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0), FONDO_SANO, MEMORIA_SANA,
+            ARCHIVOS_SANOS, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, umbralesCalibrados)
+            .ejecutar(INSTANCIA);
+
+        assertThat(isbd.im().orElseThrow().puntuacion()).isCloseTo(0.0, offset(0.01));
+        // Y como MEMORIA cae bajo el umbral de veto (40), el ISBD entero queda CRITICO.
+        assertThat(isbd.estado()).isEqualTo(Estado.CRITICO);
+        assertThat(isbd.estadoPorVeto()).isTrue();
+    }
+
+    @Test
+    void un_grupo_ausente_en_la_tabla_cae_al_respaldo_en_codigo_sin_tumbar_el_ciclo() {
+        // La tabla trae MEMORIA pero no los otros tres grupos (alguien borró
+        // filas, o una migración a medias). Los que faltan usan UmbralesIniciales
+        // y el ciclo se completa igual.
+        RepositorioUmbrales soloMemoria = instancia -> Map.of(
+            GrupoUmbral.MEMORIA, UmbralesIniciales.memoria());
+
+        Isbd isbd = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0), FONDO_SANO, MEMORIA_SANA,
+            ARCHIVOS_SANOS, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, soloMemoria)
+            .ejecutar(INSTANCIA);
+
+        assertThat(isbd.puntuacion()).isCloseTo(100.0, offset(0.01));
+        assertThat(isbd.estado()).isEqualTo(Estado.OPTIMO);
+        assertThat(isbd.parcial()).isFalse();
+    }
+
+    @Test
+    void una_tabla_de_umbrales_completamente_vacia_no_impide_calcular_el_isbd() {
+        RepositorioUmbrales vacio = instancia -> Map.of();
+
+        Isbd isbd = new MuestrearInstanciaServicio(procesosConSesionesBloqueadas(0.0), FONDO_SANO, MEMORIA_SANA,
+            ARCHIVOS_SANOS, repositorioMuestrasFalso, repositorioMuestrasFondoFalso, repositorioTablespacesFalso,
+            repositorioIndicesFalso, repositorioAlertasFalso, calibracionFalsa, vacio)
+            .ejecutar(INSTANCIA);
+
+        assertThat(isbd.puntuacion()).isCloseTo(100.0, offset(0.01));
+        assertThat(isbd.estado()).isEqualTo(Estado.OPTIMO);
     }
 }

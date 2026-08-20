@@ -39,6 +39,24 @@ nunca se hizo — los umbrales siguen siendo "valores de diseño, no calibrados"
 Es la parte que más pesa en la evaluación del profesor y la única que no se
 puede resolver solo escribiendo código.*
 
+- [x] **B0. Umbrales como datos, no como código.** Prerrequisito que estaba
+  implícito y sin registrar: `MuestrearInstanciaServicio` leía
+  `UmbralesIniciales` (compilado) en cada ciclo, así que "ajustar umbrales"
+  (B4) significaba editar Java y redesplegar en cada iteración de
+  calibración. Ahora salen de `monitor_umbral_puntuacion` (V8) vía
+  `RepositorioUmbrales` — calibrar es un `UPDATE`. Incluye los perfiles por
+  tamaño (`PEQUENA`/`MEDIANA`/`GRANDE`, herencia por variable desde
+  `ESTANDAR`) que pide el requisito "paramétrico" de las notas de clase.
+  Ver ADR 0007.
+
+  La tabla `monitor_umbral` de V1 se eliminó: mezclaba los umbrales de
+  puntuación con los de alerta y ataba ambos a `calibracion_id`, lo que los
+  dejaba huérfanos cada vez que `registrar()` cambiaba los pesos.
+
+  **Pendiente del mismo tipo**: los umbrales de *alerta* (`AlertasIniciales`
+  / `UmbralAlerta`, con histéresis y confirmación) siguen en código y
+  necesitan su propia tabla. B4 no está completo sin eso.
+
 - **B1. Línea base — operación, 1-2 semanas.** Dejar el planificador
   corriendo en condiciones normales, guardando crudos, sin tocar umbrales.
   Debe cubrir días laborales y fines de semana. **Esto no se puede acelerar
@@ -52,10 +70,19 @@ puede resolver solo escribiendo código.*
   reales (ya lo hicimos una vez para procesos/memoria en esta sesión, falta
   repetirlo sistemáticamente y con los umbrales de alerta, no solo de
   puntuación).
-- **B4. Ajustar `UmbralesIniciales` y `AlertasIniciales`.** Con B2+B3,
-  reemplazar los valores de diseño por los calibrados, documentando la
-  fuente de cada uno (percentil observado vs. límite duro vs. prueba de
-  estrés).
+- **B4. Aplicar los valores calibrados.** Con B2+B3, reemplazar los valores
+  de diseño por los calibrados, documentando la fuente de cada uno
+  (percentil observado vs. límite duro vs. prueba de estrés).
+
+  Para los umbrales de **puntuación** ya no hace falta tocar código (B0):
+  es un `UPDATE` sobre `monitor_umbral_puntuacion`, y la columna `fuente`
+  es donde va esa justificación. Ojo: si se cambia un valor del perfil
+  `ESTANDAR`, hay que cambiarlo también en `UmbralesIniciales` (que sigue
+  siendo el respaldo en código) o `JdbcRepositorioUmbralesIT` falla — es
+  a propósito, para que las dos copias no diverjan en silencio.
+
+  Para los umbrales de **alerta** todavía sí hay que editar
+  `AlertasIniciales` y recompilar, hasta que tengan su propia tabla.
 - **B5. Justificar los pesos (AHP o análisis de sensibilidad).** Los
   30/35/35 siguen siendo los del documento original. AHP (comparación por
   pares con verificación de consistencia CR) es lo más defendible; un
@@ -142,12 +169,24 @@ variables iniciales lo necesitaba.*
   Verificado en vivo: reconstruí el `monitor-api` de docker compose con el
   frontend nuevo y confirmé que el bundle servido trae el código de los
   tres componentes nuevos.
-- **E3. Selector de instancia.** Deliberadamente no construido: no hay
-  `GET /instancias` (listado) en el backend -- ver `SaludController`, lo
-  excluye a propósito -- así que una UI de selección hoy no tendría de
-  dónde listar opciones. Construirla ahora sería adelantarse a una
-  necesidad que no existe todavía (ADR 0001: una sola instancia). Revisar
-  si el backend alguna vez expone ese endpoint.
+- [x] **E3. Selector de instancia — construido como "vista general".** El
+  backend ya expone `GET /api/v1/instancias` (`InstanciasController` +
+  `RepositorioInstancias`), y el frontend arranca en `VistaInstancias` (una
+  grilla con un semáforo por base) desde donde se entra a
+  `DashboardInstancia`. Responde al pedido del profesor de "un dashboard
+  principal donde aparezcan todas las bases de datos".
+
+  **Ojo, sigue a medias**: hoy solo hay UNA instancia real
+  (`docker-compose.yml` levanta un único Oracle y V6 siembra una sola fila),
+  así que la pantalla existe pero no demuestra todavía el multi-cliente.
+  Levantar una segunda instancia Oracle es lo que la convierte en una demo
+  de verdad — ADR 0001 dejó el compose preparado para duplicar el servicio,
+  con la advertencia de que cada contenedor de Oracle Free pesa varios GB.
+
+  Pendientes menores anotados al construirla: no sincroniza con la URL (el
+  botón "atrás" del navegador no vuelve a la vista general), y el estilo
+  semáforo+barra se eligió sobre un velocímetro con aguja sin confirmarlo
+  con el profesor.
 - [x] **E4. Pulido de UX.** Loading skeleton (`.skeleton`, shimmer con
   `prefers-reduced-motion` respetado) reemplaza el "Cargando…" plano.
   Manejo de errores por panel: antes `refrescar()` atrapaba los fallos de

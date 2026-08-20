@@ -12,6 +12,7 @@ import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioIndices;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
 import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioTablespaces;
+import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioUmbrales;
 import cr.ac.una.monitor.dominio.agregacion.CalculadorComponente;
 import cr.ac.una.monitor.dominio.agregacion.CalculadorDelta;
 import cr.ac.una.monitor.dominio.agregacion.CombinadorSubIndicadores;
@@ -25,6 +26,8 @@ import cr.ac.una.monitor.dominio.alertas.Nivel;
 import cr.ac.una.monitor.dominio.alertas.ResultadoEvaluacion;
 import cr.ac.una.monitor.dominio.alertas.UmbralAlerta;
 import cr.ac.una.monitor.dominio.calibracion.Calibracion;
+import cr.ac.una.monitor.dominio.calibracion.GrupoUmbral;
+import cr.ac.una.monitor.dominio.calibracion.Umbral;
 import cr.ac.una.monitor.dominio.calibracion.UmbralesIniciales;
 import cr.ac.una.monitor.dominio.modelo.Componente;
 import cr.ac.una.monitor.dominio.modelo.DetalleTablespace;
@@ -55,6 +58,13 @@ import java.util.stream.Collectors;
  * IP ya no es un único indicador plano: se calcula IP_usuarios (V$SESSION) e
  * IP_fondo (DBW0/LGWR/CKPT/PMON/SMON, ver ADR 0006) por separado y se
  * combinan con CombinadorSubIndicadores.
+ *
+ * Umbrales: ya NO salen de UmbralesIniciales en cada ciclo, sino de
+ * RepositorioUmbrales (tabla monitor_umbral_puntuacion, migración V8), que
+ * además resuelve el perfil de tamaño de la instancia. UmbralesIniciales
+ * quedó como semilla de esa tabla y como respaldo por grupo (ver calcular()).
+ * Esto es lo que hace que calibrar sea un UPDATE y no un release -- el
+ * Módulo B del plan de trabajo dependía de ello. Ver ADR 0007.
  *
  * Memoria: m8_over_alloc_delta y m10_multipass_delta se calculan aquí
  * (CalculadorDelta), consultando la última muestra guardada ANTES de
@@ -94,9 +104,11 @@ import java.util.stream.Collectors;
  * hasta ahora.
  *
  * Alertas (dominio.alertas, MONITOR_ALERTAS): se evalúan las cinco
- * variables de AlertasIniciales. a2_datafiles_offline y peor_tablespace_pct
- * (por tablespace) solo si el agregado de archivos se pudo leer este ciclo
- * -- mismo criterio que el detalle de tablespaces. b1_procesos_caidos,
+ * variables de AlertasIniciales. a2_datafiles_offline se evalúa siempre que
+ * el AGREGADO de archivos se pudo leer (su dato vive ahí); peor_tablespace_pct
+ * (por tablespace) exige además que el DETALLE por tablespace se haya
+ * recolectado bien, porque además reconcilia alertas huérfanas.
+ * b1_procesos_caidos,
  * p6_sesiones_bloqueadas y m8_over_alloc_delta se evalúan junto con
  * fondo/procesos/memoria respectivamente, cada una condicionada solo a que
  * su propio componente se haya recolectado. Cada
@@ -123,6 +135,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     private final RepositorioIndices indices;
     private final RepositorioAlertas alertas;
     private final RepositorioCalibracion calibraciones;
+    private final RepositorioUmbrales umbrales;
     private final CalculadorComponente calculador = new CalculadorComponente();
     private final CombinadorSubIndicadores combinador = new CombinadorSubIndicadores();
     private final MotorIndicadores motor = new MotorIndicadores();
@@ -132,7 +145,7 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
             RecolectorMemoria memoria, RecolectorArchivos archivos,
             RepositorioMuestras muestras, RepositorioMuestrasFondo muestrasFondo,
             RepositorioTablespaces tablespaces, RepositorioIndices indices, RepositorioAlertas alertas,
-            RepositorioCalibracion calibraciones) {
+            RepositorioCalibracion calibraciones, RepositorioUmbrales umbrales) {
         this.procesosUsuarios = procesosUsuarios;
         this.procesosFondo = procesosFondo;
         this.memoria = memoria;
@@ -143,11 +156,13 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         this.indices = indices;
         this.alertas = alertas;
         this.calibraciones = calibraciones;
+        this.umbrales = umbrales;
     }
 
     @Override
     public Isbd ejecutar(InstanciaId instancia) {
         Calibracion calibracionVigente = calibracionVigenteOInicial();
+        Map<GrupoUmbral, List<Umbral>> umbralesVigentes = umbrales.vigentes(instancia);
 
         Optional<Muestra> muestraUsuarios =
             recolectarSeguro("procesos-usuarios", () -> procesosUsuarios.recolectar(instancia));
@@ -171,35 +186,70 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
         });
         muestraArchivos.ifPresent(m -> {
             muestras.guardar(instancia, m);
+
+            // a2_datafiles_offline sale del AGREGADO (esta muestra), no del
+            // detalle por tablespace -- se evalúa siempre que el agregado se
+            // haya recolectado, pase lo que pase con la consulta de
+            // tablespaces. Estuvo un tiempo dentro del ifPresent de abajo y
+            // eso significaba que un fallo de DBA_TABLESPACE_USAGE_METRICS
+            // (consulta aparte, más pesada, y con timeout de 10s desde
+            // JdbcClienteConTimeout) se tragaba en silencio la alerta de un
+            // datafile OFFLINE, que es binaria y grave. El veto del ISBD sí
+            // disparaba, pero no quedaba episodio en MONITOR_ALERTAS ni
+            // aparecía en el panel de alertas -- justo la distinción que
+            // documenta D3 en el plan de trabajo.
+            evaluarAlertaDatafilesOffline(instancia, m);
+
             // Optional, no .orElse(List.of()): hace falta distinguir "la
             // recolección falló, no sé nada este ciclo" de "recolectó bien, y
             // ahora mismo no hay tablespaces" -- solo en el primer caso NO se
-            // debe reconciliar alertas abiertas (ver evaluarAlertas), o un
-            // fallo transitorio cerraría alertas reales por error.
+            // debe reconciliar alertas abiertas (ver
+            // cerrarAlertasDeTablespacesQueYaNoExisten), o un fallo
+            // transitorio cerraría alertas reales por error.
             Optional<List<DetalleTablespace>> detalleTablespaces =
                 recolectarSeguro("tablespaces", () -> archivos.recolectarTablespaces(instancia));
             detalleTablespaces.ifPresent(detalle -> {
                 if (!detalle.isEmpty()) {
                     tablespaces.guardar(instancia, m.momento(), detalle);
                 }
-                evaluarAlertas(instancia, m, detalle);
+                evaluarAlertasDeTablespaces(instancia, detalle);
             });
         });
 
         Optional<Indicador> ipUsuarios = muestraUsuarios.map(
-            m -> calculador.calcular(m, Componente.PROCESOS, UmbralesIniciales.procesosUsuarios()));
+            m -> calcular(m, GrupoUmbral.PROCESOS_USUARIOS, umbralesVigentes));
         Optional<Indicador> ipFondo = muestraFondo.map(
-            m -> calculador.calcular(m, Componente.PROCESOS, UmbralesIniciales.procesosFondo()));
+            m -> calcular(m, GrupoUmbral.PROCESOS_FONDO, umbralesVigentes));
         Optional<Indicador> ip = combinarIp(ipUsuarios, ipFondo);
 
         Optional<Indicador> im = muestraMemoria.map(
-            m -> calculador.calcular(m, Componente.MEMORIA, UmbralesIniciales.memoria()));
+            m -> calcular(m, GrupoUmbral.MEMORIA, umbralesVigentes));
         Optional<Indicador> ia = muestraArchivos.map(
-            m -> calculador.calcular(m, Componente.ARCHIVOS, UmbralesIniciales.archivos()));
+            m -> calcular(m, GrupoUmbral.ARCHIVOS, umbralesVigentes));
 
         Isbd isbd = motor.calcular(Instant.now(), ip, im, ia, calibracionVigente);
         indices.guardar(instancia, isbd);
         return isbd;
+    }
+
+    /**
+     * Puntúa un grupo con los umbrales que trajo la tabla, o con
+     * UmbralesIniciales si ese grupo no vino.
+     *
+     * El respaldo es POR GRUPO, no todo-o-nada: si alguien borra las filas de
+     * MEMORIA pero deja las de ARCHIVOS, archivos sigue usando lo configurado
+     * y solo memoria cae al código. Es el mismo criterio que
+     * calibracionVigenteOInicial() aplica a los pesos -- el monitor nunca deja
+     * de puntuar por un problema de configuración, pero tampoco silencia el
+     * hecho de que está usando el respaldo.
+     */
+    private Indicador calcular(Muestra muestra, GrupoUmbral grupo, Map<GrupoUmbral, List<Umbral>> vigentes) {
+        List<Umbral> delGrupo = vigentes.get(grupo);
+        if (delGrupo == null || delGrupo.isEmpty()) {
+            log.warn("Sin umbrales configurados para {} -- usando los valores de diseño de UmbralesIniciales", grupo);
+            delGrupo = UmbralesIniciales.porGrupo().get(grupo);
+        }
+        return calculador.calcular(muestra, grupo.componente(), delGrupo);
     }
 
     /**
@@ -226,11 +276,24 @@ public class MuestrearInstanciaServicio implements MuestrearInstancia {
     }
 
     /** Ver AlertasIniciales: datafiles offline (binaria) y peor_tablespace_pct por tablespace. */
-    private void evaluarAlertas(InstanciaId instancia, Muestra muestraArchivos, List<DetalleTablespace> detalle) {
+    /**
+     * Binaria y grave, y su dato vive en el agregado de archivos -- por eso
+     * NO depende de que la recolección del detalle por tablespace haya
+     * funcionado este ciclo. Ver el comentario del call site en ejecutar().
+     */
+    private void evaluarAlertaDatafilesOffline(InstanciaId instancia, Muestra muestraArchivos) {
         evaluarAlerta(instancia, Componente.ARCHIVOS, AlertasIniciales.datafilesOffline(),
             muestraArchivos.valor("a2_datafiles_offline"), Optional.empty(),
             valor -> "Datafiles offline: %d (umbral: 1).".formatted((int) valor));
+    }
 
+    /**
+     * Una alerta por tablespace, más la reconciliación de los que ya no
+     * existen. Ambas cosas SÍ exigen una recolección exitosa del detalle:
+     * evaluar sobre una lista vacía que en realidad es "no pude leer"
+     * cerraría alertas reales.
+     */
+    private void evaluarAlertasDeTablespaces(InstanciaId instancia, List<DetalleTablespace> detalle) {
         for (DetalleTablespace ts : detalle) {
             evaluarAlerta(instancia, Componente.ARCHIVOS, AlertasIniciales.peorTablespacePct(),
                 ts.usedPercent(), Optional.of(ts.nombre()),

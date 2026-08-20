@@ -18,9 +18,10 @@ import java.util.Map;
  * veto_habilitado/umbral_veto_componente sobre el esquema de V1).
  *
  * Solo cubre pesos + veto -- Calibracion no incluye la lista de Umbral por
- * variable (eso sigue siendo UmbralesIniciales, código, no datos).
- * monitor_umbral queda sin usar hasta que el dominio soporte calibrar
- * umbrales por variable, no solo los tres pesos de IP/IM/IA.
+ * variable. Esos viven aparte, en monitor_umbral_puntuacion
+ * (JdbcRepositorioUmbrales), deliberadamente NO atados a calibracion_id:
+ * registrar() abre una fila nueva cada vez que cambian los pesos, y eso
+ * dejaría huérfanos los umbrales. Ver ADR 0007.
  *
  * registrar() no recibe nombre/justificación (Calibracion no los tiene) --
  * se genera un nombre con la marca de tiempo; ponerle un nombre elegido por
