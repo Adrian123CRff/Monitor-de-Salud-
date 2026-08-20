@@ -21,14 +21,14 @@ const isbd: Isbd = {
 
 describe('IndicadoresTiles', () => {
   it('sin onSeleccionar, los tiles no son clicables', () => {
-    render(<IndicadoresTiles actual={isbd} historico={[]} />);
+    render(<IndicadoresTiles actual={isbd} />);
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('con onSeleccionar, un clic en un tile pasa el componente correcto', () => {
     const onSeleccionar = vi.fn();
-    render(<IndicadoresTiles actual={isbd} historico={[]} onSeleccionar={onSeleccionar} />);
+    render(<IndicadoresTiles actual={isbd} onSeleccionar={onSeleccionar} />);
 
     fireEvent.click(screen.getByText('Memoria · IM'));
 
@@ -48,7 +48,7 @@ describe('IndicadoresTiles -- color semantico (pedido del profesor)', () => {
       estadoIa: 'OPTIMO',
     };
 
-    render(<IndicadoresTiles actual={mixto} historico={[]} />);
+    render(<IndicadoresTiles actual={mixto} />);
 
     // El chip nombra el estado, asi el color no es la unica senal (accesibilidad).
     expect(screen.getByText('Crítico')).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe('IndicadoresTiles -- color semantico (pedido del profesor)', () => {
   it('un componente sin datos queda en gris, no en un color de la escala', () => {
     const sinMemoria: Isbd = { ...isbd, im: null, estadoIm: null };
 
-    render(<IndicadoresTiles actual={sinMemoria} historico={[]} />);
+    render(<IndicadoresTiles actual={sinMemoria} />);
 
     const tileMemoria = screen.getByText('—').closest('.tile');
     expect(tileMemoria?.querySelector('.swatch')).toHaveStyle({ background: 'var(--muted)' });

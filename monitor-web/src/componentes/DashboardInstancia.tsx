@@ -199,7 +199,7 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
       {estado.isbd && (
         <div className="grid">
           <IsbdHero isbd={estado.isbd} />
-          <IndicadoresTiles actual={estado.isbd} historico={estado.historico} onSeleccionar={seleccionarComponente} />
+          <IndicadoresTiles actual={estado.isbd} onSeleccionar={seleccionarComponente} />
 
           {componenteSeleccionado && (
             <ComponenteDetalle

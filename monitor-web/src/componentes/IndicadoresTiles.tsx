@@ -1,18 +1,15 @@
 import type { Componente, Estado, Isbd } from '../api/tipos';
 import { COLOR_ESTADO, ETIQUETA_ESTADO, formatoNumero } from '../utilidades';
-import { Sparkline } from './Sparkline';
 
 interface Fila {
   etiqueta: string;
   componente: Componente;
   valor: number | null;
   estado: Estado | null;
-  serie: number[];
 }
 
 interface Props {
   actual: Isbd;
-  historico: Isbd[];
   onSeleccionar?: (componente: Componente) => void;
 }
 
@@ -28,12 +25,18 @@ interface Props {
  * veía igual de naranja que un IP en 100, así que el color no informaba
  * nada y peor: sugería un riesgo que no existía. Un componente sin datos se
  * queda en gris, nunca en un color de la escala.
+ *
+ * Estos tiles muestran SOLO el valor actual. Antes cada uno llevaba además
+ * un sparkline alimentado por el mismo historico que dibuja HistoricoChart
+ * un poco más abajo en la misma pantalla -- la misma serie de datos
+ * representada dos veces, compitiendo por la atención sin agregar nada. El
+ * eje del tiempo vive en un solo lugar: el gráfico de evolución.
  */
-export function IndicadoresTiles({ actual, historico, onSeleccionar }: Props) {
+export function IndicadoresTiles({ actual, onSeleccionar }: Props) {
   const filas: Fila[] = [
-    { etiqueta: 'Procesos · IP', componente: 'PROCESOS', valor: actual.ip, estado: actual.estadoIp, serie: serieDe(historico, 'ip') },
-    { etiqueta: 'Memoria · IM', componente: 'MEMORIA', valor: actual.im, estado: actual.estadoIm, serie: serieDe(historico, 'im') },
-    { etiqueta: 'Archivos · IA', componente: 'ARCHIVOS', valor: actual.ia, estado: actual.estadoIa, serie: serieDe(historico, 'ia') },
+    { etiqueta: 'Procesos · IP', componente: 'PROCESOS', valor: actual.ip, estado: actual.estadoIp },
+    { etiqueta: 'Memoria · IM', componente: 'MEMORIA', valor: actual.im, estado: actual.estadoIm },
+    { etiqueta: 'Archivos · IA', componente: 'ARCHIVOS', valor: actual.ia, estado: actual.estadoIa },
   ];
 
   return (
@@ -57,13 +60,6 @@ export function IndicadoresTiles({ actual, historico, onSeleccionar }: Props) {
               <div className="val tnum" style={{ color }}>
                 {formatoNumero(f.valor)}
               </div>
-              {f.serie.length >= 2 ? (
-                <Sparkline valores={f.serie} color={color} />
-              ) : (
-                <span className="muted" style={{ fontSize: 12 }}>
-                  sin historial
-                </span>
-              )}
             </div>
             {f.estado && (
               <span className="chip" style={{ color, borderColor: color, marginTop: 8 }}>
@@ -80,8 +76,4 @@ export function IndicadoresTiles({ actual, historico, onSeleccionar }: Props) {
       </div>
     </section>
   );
-}
-
-function serieDe(historico: Isbd[], campo: 'ip' | 'im' | 'ia'): number[] {
-  return historico.map((h) => h[campo]).filter((v): v is number => v !== null);
 }
