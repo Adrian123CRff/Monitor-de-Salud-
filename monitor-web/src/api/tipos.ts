@@ -19,11 +19,21 @@ export interface Isbd {
   estadoPorVeto: boolean;
   parcial: boolean;
   // true si "momento" ya es más viejo que ~3 ciclos de muestreo (ver
-  // SaludController.MULTIPLICADOR_VETUSTEZ) -- distinto de "parcial", que
-  // dice si ESE ciclo tuvo componentes ausentes. Solo lo calcula GET /salud;
-  // /salud/historico y POST /muestrear siempre lo mandan en false.
+  // CalculadorVetustez en el backend) -- distinto de "parcial", que dice si
+  // ESE ciclo tuvo componentes ausentes. Lo calculan GET /salud y GET
+  // /instancias; /salud/historico y POST /muestrear siempre mandan false.
   vetusto: boolean;
   causas: string[];
+}
+
+/** GET .../instancias -- la vista general, un tile por base de datos monitoreada. */
+export interface ResumenInstancia {
+  id: number;
+  alias: string;
+  // null cuando la instancia todavía no tiene ningún Isbd calculado (recién
+  // agregada al catálogo) -- el tile lo muestra como "sin datos", nunca como
+  // un semáforo inventado.
+  salud: Isbd | null;
 }
 
 /** GET .../tablespaces. */

@@ -1,4 +1,4 @@
-import type { Alerta, Calibracion, Componente, Isbd, Muestra, ProblemDetail, Tablespace } from './tipos';
+import type { Alerta, Calibracion, Componente, Isbd, Muestra, ProblemDetail, ResumenInstancia, Tablespace } from './tipos';
 
 // ADR 0001: una sola instancia Oracle (Docker), coincide con monitor.instancia-id
 // del backend (planificador). No hay RepositorioInstancias todavía -- ver ADR 0001.
@@ -20,6 +20,11 @@ async function obtener<T>(ruta: string): Promise<T> {
     throw new Error(problema?.detail ?? `${resp.status} ${resp.statusText}`);
   }
   return resp.json() as Promise<T>;
+}
+
+/** GET .../instancias -- la vista general: una fila por base de datos monitoreada. */
+export function obtenerInstancias(): Promise<ResumenInstancia[]> {
+  return obtener<ResumenInstancia[]>(`${BASE}/instancias`);
 }
 
 export function obtenerSalud(instancia = INSTANCIA_ID): Promise<Isbd> {

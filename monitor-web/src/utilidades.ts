@@ -1,5 +1,8 @@
 import type { Estado, Nivel } from './api/tipos';
 
+/** Compartido entre App/VistaInstancias -- ambas vistas se refrescan solas mientras están montadas. */
+export const INTERVALO_REFRESCO_MS = 15_000;
+
 /** Colores por Estado (Estado.java: OPTIMO(90-100) ... CRITICO(0-40)). */
 export const COLOR_ESTADO: Record<Estado, string> = {
   OPTIMO: 'var(--optimo)',

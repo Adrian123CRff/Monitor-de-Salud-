@@ -1,238 +1,36 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  forzarMuestreo,
-  obtenerAlertas,
-  obtenerComponente,
-  obtenerHistorico,
-  obtenerSalud,
-  obtenerTablespaces,
-  SinDatosAunError,
-} from './api/cliente';
-import type { Alerta, Componente, Isbd, Muestra, Tablespace } from './api/tipos';
-import { AlertasPanel } from './componentes/AlertasPanel';
-import { CalibracionPanel } from './componentes/CalibracionPanel';
-import { ComponenteDetalle } from './componentes/ComponenteDetalle';
-import { HistoricoChart } from './componentes/HistoricoChart';
-import { IndicadoresTiles } from './componentes/IndicadoresTiles';
-import { IsbdHero } from './componentes/IsbdHero';
-import { TablespacesPanel } from './componentes/TablespacesPanel';
-import { hace } from './utilidades';
+import { useState } from 'react';
+import { DashboardInstancia } from './componentes/DashboardInstancia';
+import { VistaInstancias } from './componentes/VistaInstancias';
 
-const INTERVALO_REFRESCO_MS = 15_000;
-const VENTANA_HISTORICO_HORAS = 24;
-
-interface Estado {
-  isbd: Isbd | null;
-  historico: Isbd[];
-  tablespaces: Tablespace[];
-  alertas: Alerta[];
-  sinDatos: boolean;
-  error: string | null;
-  cargando: boolean;
-  errorHistorico: string | null;
-  errorTablespaces: string | null;
-  errorAlertas: string | null;
+interface Seleccion {
+  id: number;
+  alias: string;
 }
 
 /**
- * El histórico y las otras vistas son complementarias -- si una falla, no
- * debe tumbar el hero del ISBD, que es lo primero que importa mostrar. Pero
- * tragarse el error en un array vacío (como antes) es indistinguible de
- * "de verdad no hay alertas": cada panel necesita saber si está vacío
- * porque no hay datos o porque su fetch falló, para mostrar cosas distintas.
+ * Pedido del profesor: un dashboard principal con todas las bases de datos
+ * (VistaInstancias), donde clic en una entra a su dashboard de detalle
+ * (DashboardInstancia, el contenido que antes vivía directo en App). Estado
+ * simple en vez de una librería de router -- no hay ninguna instalada y no
+ * hace falta para 2 pantallas (ver docs/plan-trabajo-pendiente.md módulo F).
+ *
+ * No sincroniza con la URL: el botón "atrás" del navegador no vuelve a la
+ * vista general todavía. Aceptado por ahora -- se puede agregar después con
+ * history.pushState si hace falta, sin traer una librería nueva.
  */
-async function cargarSeguro<T>(promesa: Promise<T>, vacio: T): Promise<[T, string | null]> {
-  try {
-    return [await promesa, null];
-  } catch (e) {
-    return [vacio, e instanceof Error ? e.message : String(e)];
-  }
-}
-
 export function App() {
-  const [estado, setEstado] = useState<Estado>({
-    isbd: null,
-    historico: [],
-    tablespaces: [],
-    alertas: [],
-    sinDatos: false,
-    error: null,
-    cargando: true,
-    errorHistorico: null,
-    errorTablespaces: null,
-    errorAlertas: null,
-  });
-  const [muestreando, setMuestreando] = useState(false);
-  const [calibracionAbierta, setCalibracionAbierta] = useState(false);
-  const [componenteSeleccionado, setComponenteSeleccionado] = useState<Componente | null>(null);
-  const [detalleComponente, setDetalleComponente] = useState<Record<string, Muestra> | null>(null);
-  const [detalleCargando, setDetalleCargando] = useState(false);
-  const [detalleError, setDetalleError] = useState<string | null>(null);
+  const [seleccion, setSeleccion] = useState<Seleccion | null>(null);
 
-  const refrescar = useCallback(async () => {
-    const hasta = new Date();
-    const desde = new Date(hasta.getTime() - VENTANA_HISTORICO_HORAS * 60 * 60 * 1000);
-
-    try {
-      const isbd = await obtenerSalud();
-      const [
-        [historico, errorHistorico],
-        [tablespaces, errorTablespaces],
-        [alertas, errorAlertas],
-      ] = await Promise.all([
-        cargarSeguro(obtenerHistorico(desde, hasta), [] as Isbd[]),
-        cargarSeguro(obtenerTablespaces(), [] as Tablespace[]),
-        cargarSeguro(obtenerAlertas(), [] as Alerta[]),
-      ]);
-      setEstado({
-        isbd, historico, tablespaces, alertas, sinDatos: false, error: null, cargando: false,
-        errorHistorico, errorTablespaces, errorAlertas,
-      });
-    } catch (e) {
-      if (e instanceof SinDatosAunError) {
-        setEstado((s) => ({ ...s, sinDatos: true, error: null, cargando: false }));
-      } else {
-        setEstado((s) => ({ ...s, error: e instanceof Error ? e.message : String(e), cargando: false }));
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    refrescar();
-    const id = setInterval(refrescar, INTERVALO_REFRESCO_MS);
-    return () => clearInterval(id);
-  }, [refrescar]);
-
-  useEffect(() => {
-    if (!componenteSeleccionado) {
-      return;
-    }
-    setDetalleCargando(true);
-    setDetalleError(null);
-    obtenerComponente(componenteSeleccionado)
-      .then(setDetalleComponente)
-      .catch((e) => setDetalleError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setDetalleCargando(false));
-  }, [componenteSeleccionado]);
-
-  function seleccionarComponente(componente: Componente) {
-    setComponenteSeleccionado((actual) => (actual === componente ? null : componente));
-    setDetalleComponente(null);
-  }
-
-  async function manejarForzarMuestreo() {
-    setMuestreando(true);
-    try {
-      await forzarMuestreo();
-      await refrescar();
-    } catch (e) {
-      setEstado((s) => ({ ...s, error: e instanceof Error ? e.message : String(e) }));
-    } finally {
-      setMuestreando(false);
-    }
+  if (!seleccion) {
+    return <VistaInstancias onSeleccionar={(id, alias) => setSeleccion({ id, alias })} />;
   }
 
   return (
-    <>
-      <header>
-        <h1>Monitor de Salud de Oracle</h1>
-        <span className="badge">
-          <span className={`dot pulse${estado.error ? ' critico' : ''}`} />
-          {estado.error ? 'sin conexión' : 'conectado'}
-        </span>
-        {estado.isbd && <span className="badge">muestra: {hace(estado.isbd.momento)}</span>}
-        <span className="spacer" />
-        <button onClick={() => setCalibracionAbierta((a) => !a)}>
-          {calibracionAbierta ? 'Ocultar calibración' : 'Calibración'}
-        </button>
-        <button onClick={manejarForzarMuestreo} disabled={muestreando}>
-          {muestreando ? 'Muestreando…' : 'Forzar muestreo'}
-        </button>
-      </header>
-
-      {calibracionAbierta && (
-        <div className="grid" style={{ marginBottom: 16 }}>
-          <CalibracionPanel onCerrar={() => setCalibracionAbierta(false)} />
-        </div>
-      )}
-
-      {estado.cargando && (
-        <div className="grid" aria-label="Cargando">
-          <div className="card c5 skeleton" style={{ height: 150 }} />
-          <div className="card c7 skeleton" style={{ height: 150 }} />
-          <div className="card c12 skeleton" style={{ height: 220 }} />
-          <div className="card c6 skeleton" style={{ height: 190 }} />
-          <div className="card c12 skeleton" style={{ height: 150 }} />
-        </div>
-      )}
-
-      {!estado.cargando && estado.sinDatos && (
-        <div className="card error-panel">
-          <p>Todavía no hay ningún ISBD calculado para esta instancia.</p>
-          <p className="muted">
-            El planificador corre automáticamente, o podés forzar un muestreo con el botón de arriba.
-          </p>
-          <button onClick={manejarForzarMuestreo} disabled={muestreando}>
-            {muestreando ? 'Muestreando…' : 'Forzar muestreo ahora'}
-          </button>
-        </div>
-      )}
-
-      {!estado.cargando && estado.error && !estado.sinDatos && (
-        <div className="card error-panel">
-          <p>No se pudo conectar con el backend.</p>
-          <p className="muted">{estado.error}</p>
-        </div>
-      )}
-
-      {estado.isbd && (
-        <div className="grid">
-          <IsbdHero isbd={estado.isbd} />
-          <IndicadoresTiles actual={estado.isbd} historico={estado.historico} onSeleccionar={seleccionarComponente} />
-
-          {componenteSeleccionado && (
-            <ComponenteDetalle
-              componente={componenteSeleccionado}
-              detalle={detalleComponente}
-              cargando={detalleCargando}
-              error={detalleError}
-              onCerrar={() => setComponenteSeleccionado(null)}
-            />
-          )}
-
-          <section className="card c12">
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>
-              <h2 style={{ fontSize: 15 }}>Evolución — últimas {VENTANA_HISTORICO_HORAS} h</h2>
-              <div className="legend" style={{ marginLeft: 'auto' }}>
-                <span>
-                  <span className="swatch" style={{ background: 'var(--s1)' }} />
-                  ISBD
-                </span>
-                <span>
-                  <span className="swatch" style={{ background: 'var(--s2)' }} />
-                  Procesos
-                </span>
-                <span>
-                  <span className="swatch" style={{ background: 'var(--s3)' }} />
-                  Memoria
-                </span>
-                <span>
-                  <span className="swatch" style={{ background: 'var(--s4)' }} />
-                  Archivos
-                </span>
-              </div>
-            </div>
-            {estado.errorHistorico ? (
-              <div className="panel-error">No se pudo cargar el histórico: {estado.errorHistorico}</div>
-            ) : (
-              <HistoricoChart historico={estado.historico} />
-            )}
-          </section>
-
-          <TablespacesPanel tablespaces={estado.tablespaces} error={estado.errorTablespaces} />
-          <AlertasPanel alertas={estado.alertas} error={estado.errorAlertas} />
-        </div>
-      )}
-    </>
+    <DashboardInstancia
+      key={seleccion.id}
+      instanciaId={seleccion.id}
+      alias={seleccion.alias}
+      onVolver={() => setSeleccion(null)}
+    />
   );
 }

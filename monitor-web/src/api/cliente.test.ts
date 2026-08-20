@@ -5,11 +5,12 @@ import {
   obtenerAlertas,
   obtenerCalibracion,
   obtenerComponente,
+  obtenerInstancias,
   obtenerSalud,
   obtenerTablespaces,
   SinDatosAunError,
 } from './cliente';
-import type { Calibracion, Isbd } from './tipos';
+import type { Calibracion, Isbd, ResumenInstancia } from './tipos';
 
 function respuestaJson(status: number, cuerpo: unknown): Response {
   return {
@@ -63,6 +64,20 @@ describe('obtenerSalud', () => {
     await obtenerSalud(7);
 
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/instancias/7/salud');
+  });
+});
+
+describe('obtenerInstancias', () => {
+  it('devuelve la lista de la vista general, con y sin salud', async () => {
+    const resumen: ResumenInstancia[] = [
+      { id: 1, alias: 'principal', salud: isbdEjemplo },
+      { id: 2, alias: 'recien-agregada', salud: null },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue(respuestaJson(200, resumen));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(obtenerInstancias()).resolves.toEqual(resumen);
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/instancias');
   });
 });
 

@@ -60,14 +60,19 @@ class JdbcRepositorioMuestrasIT {
         dataSource.setMaximumPoolSize(2);
 
         try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+            // activa = false: sin esto, estas filas de prueba aparecerían como
+            // tiles falsos en GET /api/v1/instancias (la vista general) del
+            // monitor-api real, que comparte esta misma base Postgres -- mismo
+            // patrón de contaminación ya encontrado y arreglado para
+            // monitor_calibracion y monitor_alertas esta sesión.
             st.execute("""
-                INSERT INTO monitor_instancia (alias, host, puerto, servicio, tipo)
-                VALUES ('IT-test', 'localhost', 1521, 'FREE', 'CDB')
+                INSERT INTO monitor_instancia (alias, host, puerto, servicio, tipo, activa)
+                VALUES ('IT-test', 'localhost', 1521, 'FREE', 'CDB', false)
                 ON CONFLICT (alias) DO NOTHING
                 """);
             st.execute("""
-                INSERT INTO monitor_instancia (alias, host, puerto, servicio, tipo)
-                VALUES ('IT-test-ultimasN', 'localhost', 1521, 'FREE', 'CDB')
+                INSERT INTO monitor_instancia (alias, host, puerto, servicio, tipo, activa)
+                VALUES ('IT-test-ultimasN', 'localhost', 1521, 'FREE', 'CDB', false)
                 ON CONFLICT (alias) DO NOTHING
                 """);
             try (ResultSet rs = st.executeQuery(

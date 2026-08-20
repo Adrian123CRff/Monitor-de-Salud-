@@ -54,9 +54,10 @@ class JdbcRepositorioAlertasIT {
         repositorio = new JdbcRepositorioAlertas(dataSource);
 
         try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+            // activa = false: ver JdbcRepositorioMuestrasIT para por qué.
             st.execute("""
-                INSERT INTO monitor_instancia (alias, host, puerto, servicio, tipo)
-                VALUES ('IT-test', 'localhost', 1521, 'FREE', 'CDB')
+                INSERT INTO monitor_instancia (alias, host, puerto, servicio, tipo, activa)
+                VALUES ('IT-test', 'localhost', 1521, 'FREE', 'CDB', false)
                 ON CONFLICT (alias) DO NOTHING
                 """);
             limpiarAlertasDePrueba(st);

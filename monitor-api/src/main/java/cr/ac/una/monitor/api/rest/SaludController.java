@@ -1,5 +1,6 @@
 package cr.ac.una.monitor.api.rest;
 
+import cr.ac.una.monitor.api.dto.CalculadorVetustez;
 import cr.ac.una.monitor.api.dto.IsbdDto;
 import cr.ac.una.monitor.aplicacion.puerto.entrada.ConsultarHistorico;
 import cr.ac.una.monitor.aplicacion.puerto.entrada.ConsultarSalud;
@@ -28,15 +29,6 @@ import java.util.List;
 @RequestMapping("/api/v1/instancias/{id}")
 public class SaludController {
 
-    /**
-     * Encontrado por auditoría externa (ver docs/, IsbdDto.vetusto): si el
-     * planificador lleva varios ciclos sin poder correr, /salud sigue
-     * devolviendo el último Isbd bueno sin avisar que ya no es reciente.
-     * 3x el intervalo de muestreo (mismo margen que CalculadorDelta usa
-     * para "ciclo perdido") evita marcar vetusto por un solo ciclo lento.
-     */
-    private static final int MULTIPLICADOR_VETUSTEZ = 3;
-
     private final ConsultarSalud consultarSalud;
     private final ConsultarHistorico consultarHistorico;
     private final MuestrearInstancia muestrearInstancia;
@@ -59,8 +51,7 @@ public class SaludController {
     @GetMapping("/salud")
     public IsbdDto salud(@PathVariable long id) {
         Isbd isbd = consultarSalud.actual(new InstanciaId(id));
-        Duration umbral = intervaloMuestreo.multipliedBy(MULTIPLICADOR_VETUSTEZ);
-        boolean vetusto = Duration.between(isbd.momento(), Instant.now()).compareTo(umbral) > 0;
+        boolean vetusto = CalculadorVetustez.esVetusto(isbd.momento(), intervaloMuestreo);
         return IsbdDto.desde(isbd, vetusto);
     }
 
