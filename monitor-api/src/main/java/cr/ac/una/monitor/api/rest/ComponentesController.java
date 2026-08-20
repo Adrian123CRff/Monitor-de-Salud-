@@ -1,8 +1,7 @@
 package cr.ac.una.monitor.api.rest;
 
-import cr.ac.una.monitor.api.dto.MuestraDto;
-import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestras;
-import cr.ac.una.monitor.aplicacion.puerto.salida.RepositorioMuestrasFondo;
+import cr.ac.una.monitor.api.dto.DetalleComponenteDto;
+import cr.ac.una.monitor.aplicacion.puerto.entrada.ConsultarComponente;
 import cr.ac.una.monitor.dominio.modelo.Componente;
 import cr.ac.una.monitor.dominio.modelo.InstanciaId;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,43 +13,41 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Lee directamente RepositorioMuestras/RepositorioMuestrasFondo (puerto/salida),
- * sin un caso de uso intermedio -- simplificación deliberada para una lectura
- * plana de "lo último guardado", sin lógica de negocio propia. La regla de
- * dependencia (ArchUnit) no lo prohíbe: solo veta depender de
- * infraestructura.persistencia (los adaptadores concretos), no de los puertos.
+ * El detalle detrás de un tile de IP/IM/IA: el dato crudo de Oracle más
+ * cuánto puntuó cada variable, para poder ver cuál está fuera de límites.
  *
- * Para PROCESOS, la respuesta trae "usuarios" y "fondo" por separado --
- * Componente.PROCESOS es ambiguo entre las dos fuentes (ver ADR 0006 /
- * RepositorioMuestrasFondo), no hay una única "última muestra de PROCESOS".
+ * Antes este controlador leía RepositorioMuestras directamente, sin caso de
+ * uso -- razonable mientras la respuesta era "lo último guardado, tal cual".
+ * Al agregar la puntuación aparece una decisión de negocio real (qué
+ * umbrales aplicar a esta instancia, cómo ordenar el aporte de cada
+ * variable, qué hacer cuando la muestra no se puede puntuar), y eso vive en
+ * ConsultarComponenteServicio, no en el borde HTTP.
+ *
+ * Para PROCESOS la respuesta trae "usuarios" y "fondo" por separado --
+ * Componente.PROCESOS es ambiguo entre las dos fuentes (ver ADR 0006).
  */
 @RestController
 @RequestMapping("/api/v1/instancias/{id}/componentes")
 public class ComponentesController {
 
-    private final RepositorioMuestras muestras;
-    private final RepositorioMuestrasFondo muestrasFondo;
+    private final ConsultarComponente consultarComponente;
 
-    public ComponentesController(RepositorioMuestras muestras, RepositorioMuestrasFondo muestrasFondo) {
-        this.muestras = muestras;
-        this.muestrasFondo = muestrasFondo;
+    public ComponentesController(ConsultarComponente consultarComponente) {
+        this.consultarComponente = consultarComponente;
     }
 
     @GetMapping("/{componente}")
-    public Map<String, MuestraDto> detalle(@PathVariable long id, @PathVariable String componente) {
+    public Map<String, DetalleComponenteDto> detalle(@PathVariable long id, @PathVariable String componente) {
         InstanciaId instancia = new InstanciaId(id);
         Componente c = Componente.valueOf(componente.toUpperCase());
 
-        Map<String, MuestraDto> resultado = new LinkedHashMap<>();
-        String claveAgregado = c == Componente.PROCESOS ? "usuarios" : "actual";
-        muestras.ultima(instancia, c).ifPresent(m -> resultado.put(claveAgregado, MuestraDto.desde(m)));
-        if (c == Componente.PROCESOS) {
-            muestrasFondo.ultima(instancia).ifPresent(m -> resultado.put("fondo", MuestraDto.desde(m)));
-        }
-
-        if (resultado.isEmpty()) {
+        var vistas = consultarComponente.detalle(instancia, c);
+        if (vistas.isEmpty()) {
             throw new SinDatosException(instancia, c);
         }
+
+        Map<String, DetalleComponenteDto> resultado = new LinkedHashMap<>();
+        vistas.forEach((clave, vista) -> resultado.put(clave, DetalleComponenteDto.desde(vista)));
         return resultado;
     }
 }

@@ -480,3 +480,35 @@ svg {
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+
+/* Desglose por variable en el detalle de un componente: que puntuo cada una
+   y cuanto le esta costando al indicador. */
+.sublab {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+.detalle-vista .sublab:first-of-type { margin-top: 0; }
+.detalle-tabla.desglose th {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--muted);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.detalle-tabla.desglose th.tnum,
+.detalle-tabla.desglose td.tnum { text-align: right; }
+.detalle-tabla.desglose td { padding: 4px 0; }
+.chip.veto {
+  margin-left: 6px;
+  font-size: 10px;
+  padding: 1px 5px;
+  color: var(--critical);
+  border: 1px solid var(--critical);
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

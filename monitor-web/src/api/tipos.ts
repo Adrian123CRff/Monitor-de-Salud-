@@ -81,7 +81,34 @@ export interface ProblemDetail {
 export interface Muestra {
   componente: Componente;
   momento: string; // ISO-8601
+  /** El crudo completo, incluidas las variables de contexto que no puntúan. */
   valores: Record<string, number>;
+  /** null cuando la muestra no se pudo puntuar (ver ConsultarComponente). */
+  puntuacion: number | null;
+  /** El Estado de esa puntuación, resuelto en el backend con la escala del §18. */
+  estado: Estado | null;
+  vetado: boolean | null;
+  /** Solo las variables que SÍ puntúan, ya ordenadas por lo que le cuestan al componente. */
+  variables: VariableEvaluada[];
+}
+
+/**
+ * El desglose que responde "cuál variable está fuera de límites", que es como
+ * el profesor describe el drill-down: entrar a un componente en rojo y ver la
+ * variable específica, no solo el número del componente.
+ */
+export interface VariableEvaluada {
+  variable: string;
+  /** Crudo. null si la muestra no lo trae (p. ej. una delta sin historial). */
+  valor: number | null;
+  /** 0-100, convención de salud. */
+  puntuacion: number;
+  /** Resuelto en el backend, no recalculado aquí: la escala vive en un solo lugar. */
+  estado: Estado;
+  pesoEnComponente: number;
+  /** (100 - puntuacion) * peso: cuántos puntos del componente se lleva esta variable. */
+  aportePerdido: number;
+  disparoVeto: boolean;
 }
 
 /** GET/PUT .../calibracion. */

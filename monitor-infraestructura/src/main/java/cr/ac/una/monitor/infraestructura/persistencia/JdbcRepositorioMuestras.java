@@ -30,10 +30,17 @@ import java.util.stream.Collectors;
  *
  * Los recolectores meten en Muestra.valores() tanto columnas crudas
  * (p1_procesos_actuales...) como variables derivadas para el cálculo del
- * índice (util_procesos_pct, peor_tablespace_pct...) que NO tienen columna
- * en el esquema. COLUMNAS_PERSISTIBLES es la lista blanca por componente
- * que filtra cuáles sí se guardan -- sin ella, guardar() intentaría
- * insertar en columnas que no existen.
+ * índice. COLUMNAS_PERSISTIBLES es la lista blanca por componente que filtra
+ * cuáles sí se guardan -- sin ella, guardar() intentaría insertar en
+ * columnas que no existen.
+ *
+ * Las derivadas que PUNTÚAN ya no se pierden (V9): las que implican un
+ * cálculo real tienen columna propia, y las dos de archivos que son alias
+ * exactos de una columna cruda se reexponen al leer (ver ALIAS_AL_LEER).
+ * Antes se filtraban todas, así que una muestra leída de vuelta puntuaba
+ * distinto que cuando se tomó -- ARCHIVOS daba 100 en el detalle mientras el
+ * ISBD del mismo ciclo decía 90 -- y el Módulo B se quedaba sin la
+ * distribución histórica que necesita para calibrar por percentiles.
  *
  * enRango() no pagina ni resume por granularidad: el puerto no pide eso
  * (List<Muestra> plano), y no hay todavía un endpoint de histórico que
@@ -49,18 +56,30 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
             "p1_procesos_actuales", "p2_procesos_maximos", "p3_sesiones_actuales",
             "p4_sesiones_activas", "p5_sesiones_inactivas", "p6_sesiones_bloqueadas",
             "p7_operaciones_largas", "p8_peor_util_recurso",
-            "limite_procesos", "limite_sesiones", "bloqueo_max_seg"),
+            "limite_procesos", "limite_sesiones", "bloqueo_max_seg",
+            "util_procesos_pct", "util_sesiones_pct"),
         Componente.MEMORIA, Set.of(
             "m1_sga_total_bytes", "m2_sga_libre_bytes", "m3_shared_pool_bytes",
             "m4_buffer_cache_bytes", "m5_pga_asignada_bytes", "m6_pga_en_uso_bytes",
             "m7_pga_maxima_bytes", "m8_over_alloc_acum", "m8_over_alloc_delta",
-            "m9_cache_hit_pct", "m10_multipass_acum", "m10_multipass_delta", "pga_target_bytes"),
+            "m9_cache_hit_pct", "m10_multipass_acum", "m10_multipass_delta", "pga_target_bytes",
+            "pga_uso_pct"),
         Componente.ARCHIVOS, Set.of(
             "a1_datafiles_online", "a2_datafiles_offline", "a3_datafiles_bytes",
             "a4_peor_tablespace_pct", "a4_tablespaces_riesgo",
             "a5_tempfiles_online", "a5_tempfiles_bytes",
             "a6_grupos_redo", "a6_min_miembros_grupo",
             "a7_archivos_invalidos", "a8_archivos_recover"));
+
+    /**
+     * Derivadas que NO son un cálculo sino otro nombre para una columna que ya
+     * existe (ver JdbcRecolectorArchivos: "son el mismo valor, dos claves").
+     * Persistirlas sería guardar el dato dos veces; se reconstruyen al leer
+     * para que la muestra que sale sea idéntica a la que entró.
+     */
+    private static final Map<String, String> ALIAS_AL_LEER = Map.of(
+        "a4_peor_tablespace_pct", "peor_tablespace_pct",
+        "a6_min_miembros_grupo", "redundancia_redo");
 
     private final JdbcClient jdbc;
 
@@ -158,6 +177,13 @@ public class JdbcRepositorioMuestras implements RepositorioMuestras {
                 valores.put(columna, valor);
             }
         }
+        ALIAS_AL_LEER.forEach((columna, derivada) -> {
+            Double valor = valores.get(columna);
+            if (valor != null) {
+                valores.put(derivada, valor);
+            }
+        });
+
         return new Muestra(componente, momento, valores, reiniciada);
     }
 

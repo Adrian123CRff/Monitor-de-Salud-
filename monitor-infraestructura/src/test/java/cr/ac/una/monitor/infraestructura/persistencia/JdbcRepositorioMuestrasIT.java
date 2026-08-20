@@ -110,9 +110,12 @@ class JdbcRepositorioMuestrasIT {
         assertThat(recuperada).isPresent();
         assertThat(recuperada.get().valores().get("p1_procesos_actuales")).isCloseTo(84.0, offset(0.01));
         assertThat(recuperada.get().valores().get("p6_sesiones_bloqueadas")).isCloseTo(0.0, offset(0.01));
-        // util_procesos_pct es derivada, no tiene columna en el esquema (modelo-datos.md
-        // decisión #2: solo se guardan crudos) -- correcto que no sobreviva el guardar/ultima.
-        assertThat(recuperada.get().valores()).doesNotContainKey("util_procesos_pct");
+        // Este assert decia lo contrario ("correcto que no sobreviva", apoyandose en
+        // modelo-datos.md decision #2: solo se guardan crudos). Esa decision se
+        // revirtio en V9: una derivada que PUNTUA tiene que sobrevivir, o la muestra
+        // leida de vuelta se puntua distinto que cuando se tomo, y el Modulo B se
+        // queda sin la distribucion historica para calibrar por percentiles.
+        assertThat(recuperada.get().valores().get("util_procesos_pct")).isCloseTo(42.0, offset(0.01));
     }
 
     @Test
@@ -159,5 +162,54 @@ class JdbcRepositorioMuestrasIT {
         assertThat(ultimas2.get(0).valores().get("p6_sesiones_bloqueadas")).isCloseTo(3.0, offset(0.01));
         assertThat(ultimas2.get(1).momento()).isEqualTo(t2);
         assertThat(ultimas2.get(1).valores().get("p6_sesiones_bloqueadas")).isCloseTo(2.0, offset(0.01));
+    }
+
+    /**
+     * Regresion: las derivadas que puntuan no sobrevivian el viaje a Postgres,
+     * asi que una muestra leida de vuelta se puntuaba distinto que cuando se
+     * tomo (ARCHIVOS daba 100 en el detalle contra 90 en el ISBD del mismo
+     * ciclo), y el Modulo B se quedaba sin la distribucion historica que
+     * necesita para calibrar por percentiles. Ver V9.
+     */
+    @Test
+    void las_variables_derivadas_que_puntuan_sobreviven_el_viaje_de_ida_y_vuelta() {
+        JdbcRepositorioMuestras repositorio = new JdbcRepositorioMuestras(dataSource);
+        Instant momento = Instant.now();
+
+        // Procesos y memoria: derivadas con calculo real, tienen columna propia.
+        repositorio.guardar(INSTANCIA, new Muestra(Componente.PROCESOS, momento, Map.of(
+            "p1_procesos_actuales", 90.0,
+            "limite_procesos", 200.0,
+            "util_procesos_pct", 45.0,
+            "p3_sesiones_actuales", 113.0,
+            "limite_sesiones", 322.0,
+            "util_sesiones_pct", 35.09
+        ), false));
+
+        repositorio.guardar(INSTANCIA, new Muestra(Componente.MEMORIA, momento, Map.of(
+            "m5_pga_asignada_bytes", 402869248.0,
+            "pga_target_bytes", 536870912.0,
+            "pga_uso_pct", 75.04
+        ), false));
+
+        // Archivos: alias exactos, se reconstruyen al leer sin columna propia.
+        repositorio.guardar(INSTANCIA, new Muestra(Componente.ARCHIVOS, momento, Map.of(
+            "a4_peor_tablespace_pct", 82.5,
+            "a6_min_miembros_grupo", 1.0
+        ), false));
+
+        Map<String, Double> procesos = repositorio.ultima(INSTANCIA, Componente.PROCESOS).orElseThrow().valores();
+        assertThat(procesos.get("util_procesos_pct")).isCloseTo(45.0, offset(0.01));
+        assertThat(procesos.get("util_sesiones_pct")).isCloseTo(35.09, offset(0.01));
+
+        Map<String, Double> memoria = repositorio.ultima(INSTANCIA, Componente.MEMORIA).orElseThrow().valores();
+        assertThat(memoria.get("pga_uso_pct")).isCloseTo(75.04, offset(0.01));
+
+        Map<String, Double> archivos = repositorio.ultima(INSTANCIA, Componente.ARCHIVOS).orElseThrow().valores();
+        assertThat(archivos.get("peor_tablespace_pct")).isCloseTo(82.5, offset(0.01));
+        assertThat(archivos.get("redundancia_redo")).isCloseTo(1.0, offset(0.01));
+        // El crudo del que salen sigue estando, no se reemplaza.
+        assertThat(archivos.get("a4_peor_tablespace_pct")).isCloseTo(82.5, offset(0.01));
+        assertThat(archivos.get("a6_min_miembros_grupo")).isCloseTo(1.0, offset(0.01));
     }
 }
