@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { guardarCalibracion, obtenerCalibracion } from '../api/cliente';
 import type { Calibracion } from '../api/tipos';
+import { FichaControl } from './Fichas';
 
 const COMPONENTES = ['PROCESOS', 'MEMORIA', 'ARCHIVOS'] as const;
 
@@ -63,19 +64,28 @@ export function CalibracionPanel({ onCerrar }: { onCerrar: () => void }) {
         <>
           <div className="calibracion-grid">
             {COMPONENTES.map((c) => (
-              <label className="calibracion-campo" key={c}>
-                <span>{c}</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="1"
-                  value={calibracion.pesos[c] ?? 0}
-                  onChange={(e) => actualizarPeso(c, e.target.value)}
-                />
-              </label>
+              <div className="calibracion-celda" key={c}>
+                {/* La ficha va FUERA del <label>: dentro, su texto se sumaria al
+                    nombre accesible del campo ("PROCESOS i") y un clic en el
+                    boton enfocaria el input en vez de abrir la ayuda.
+                    Una sola para los tres: el concepto de "peso" es el mismo. */}
+                {c === COMPONENTES[0] && <FichaControl clave="pesos" />}
+                <label className="calibracion-campo">
+                  <span>{c}</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={calibracion.pesos[c] ?? 0}
+                    onChange={(e) => actualizarPeso(c, e.target.value)}
+                  />
+                </label>
+              </div>
             ))}
-            <label className="calibracion-campo">
+            <div className="calibracion-celda">
+              <FichaControl clave="umbralVeto" />
+              <label className="calibracion-campo">
               <span>Umbral de veto (0-100)</span>
               <input
                 type="number"
@@ -89,18 +99,22 @@ export function CalibracionPanel({ onCerrar }: { onCerrar: () => void }) {
                   setGuardado(false);
                 }}
               />
-            </label>
-            <label className="calibracion-campo calibracion-checkbox">
-              <input
-                type="checkbox"
-                checked={calibracion.vetoHabilitado}
-                onChange={(e) => {
-                  setCalibracion((c) => (c ? { ...c, vetoHabilitado: e.target.checked } : c));
-                  setGuardado(false);
-                }}
-              />
-              <span>Veto absoluto habilitado</span>
-            </label>
+              </label>
+            </div>
+            <div className="calibracion-celda">
+              <FichaControl clave="vetoHabilitado" />
+              <label className="calibracion-campo calibracion-checkbox">
+                <input
+                  type="checkbox"
+                  checked={calibracion.vetoHabilitado}
+                  onChange={(e) => {
+                    setCalibracion((c) => (c ? { ...c, vetoHabilitado: e.target.checked } : c));
+                    setGuardado(false);
+                  }}
+                />
+                <span>Veto absoluto habilitado</span>
+              </label>
+            </div>
           </div>
 
           {!sumaValida && (

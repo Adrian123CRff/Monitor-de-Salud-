@@ -1,5 +1,6 @@
 import type { Alerta } from '../api/tipos';
 import { COLOR_NIVEL, hace } from '../utilidades';
+import { FichaConcepto } from './Fichas';
 
 interface Props {
   alertas: Alerta[];
@@ -11,7 +12,11 @@ export function AlertasPanel({ alertas, error }: Props) {
   return (
     <section className="card c12">
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <h2 style={{ fontSize: 15 }}>Alertas abiertas</h2>
+        <h2 style={{ fontSize: 15 }}>
+          Alertas abiertas
+          <FichaConcepto clave="alertas" />
+          <FichaConcepto clave="histeresis" />
+        </h2>
         <span className="muted" style={{ fontSize: 12 }}>
           {error ? 'error' : alertas.length === 0 ? 'ninguna' : `${alertas.length}`}
         </span>

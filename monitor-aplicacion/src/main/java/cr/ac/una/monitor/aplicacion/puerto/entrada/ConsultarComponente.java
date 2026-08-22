@@ -1,5 +1,6 @@
 package cr.ac.una.monitor.aplicacion.puerto.entrada;
 
+import cr.ac.una.monitor.dominio.calibracion.TipoUmbral;
 import cr.ac.una.monitor.dominio.modelo.Componente;
 import cr.ac.una.monitor.dominio.modelo.InstanciaId;
 
@@ -63,13 +64,22 @@ public interface ConsultarComponente {
      * aportePerdido = (100 - puntuacion) * peso: cuántos puntos del
      * componente se está llevando esta variable. Es lo que permite ordenar
      * el detalle por "qué me está costando más" en vez de alfabéticamente.
+     *
+     * tipo/valorOk/valorCritico viajan para que la ayuda contextual pueda
+     * decir dónde está el límite HOY ("sano hasta 70, crítico desde 95") en
+     * vez de repetir un número escrito a mano que quedaría mintiendo en
+     * cuanto alguien recalibre. Solo tienen sentido en los tipos LINEAL_*;
+     * en los demás quedan en 0 y la interfaz no los muestra.
      */
     record VariableEvaluada(
             String variable,
             Double valor,
             double puntuacion,
             double pesoEnComponente,
-            boolean disparoVeto) {
+            boolean disparoVeto,
+            TipoUmbral tipo,
+            double valorOk,
+            double valorCritico) {
 
         public double aportePerdido() {
             return (100.0 - puntuacion) * pesoEnComponente;

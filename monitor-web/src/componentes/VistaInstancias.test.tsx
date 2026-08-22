@@ -87,8 +87,10 @@ describe('VistaInstancias -- busqueda y orden (pedido del profesor)', () => {
     conSalud(3, 'bodega-pruebas', 68, 'ADVERTENCIA'),
   ];
 
+  // Acotado a los tiles: desde que hay botones de ayuda, getAllByRole('button')
+  // tambien devuelve los "i" del encabezado.
   const aliasEnPantalla = () =>
-    screen.getAllByRole('button').map((b) => b.querySelector('.lab')?.textContent);
+    [...document.querySelectorAll('.tile')].map((t) => t.querySelector('.lab')?.textContent);
 
   it('ordena peor primero por defecto, sin importar el orden que devuelva la API', async () => {
     vi.mocked(obtenerInstancias).mockResolvedValue(tres);

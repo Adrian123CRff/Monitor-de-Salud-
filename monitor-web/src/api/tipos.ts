@@ -109,6 +109,15 @@ export interface VariableEvaluada {
   /** (100 - puntuacion) * peso: cuántos puntos del componente se lleva esta variable. */
   aportePerdido: number;
   disparoVeto: boolean;
+  /** Cómo se normaliza. Alimenta la ayuda contextual, no el render del número. */
+  tipoUmbral: string;
+  /**
+   * Los límites vigentes HOY, para que la ayuda diga dónde está el corte sin
+   * escribirlo a mano. null en los tipos que no tienen banda (una penalización
+   * por evento no tiene un "sano hasta X").
+   */
+  valorOk: number | null;
+  valorCritico: number | null;
 }
 
 /** GET/PUT .../calibracion. */

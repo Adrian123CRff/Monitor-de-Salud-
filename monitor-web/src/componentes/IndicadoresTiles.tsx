@@ -1,8 +1,11 @@
 import type { Componente, Estado, Isbd } from '../api/tipos';
 import { COLOR_ESTADO, ETIQUETA_ESTADO, formatoNumero } from '../utilidades';
+import { FichaConcepto } from './Fichas';
 
 interface Fila {
   etiqueta: string;
+  /** Clave de su ficha en el catálogo de conceptos. */
+  ayuda: 'ip' | 'im' | 'ia';
   componente: Componente;
   valor: number | null;
   estado: Estado | null;
@@ -34,9 +37,9 @@ interface Props {
  */
 export function IndicadoresTiles({ actual, onSeleccionar }: Props) {
   const filas: Fila[] = [
-    { etiqueta: 'Procesos · IP', componente: 'PROCESOS', valor: actual.ip, estado: actual.estadoIp },
-    { etiqueta: 'Memoria · IM', componente: 'MEMORIA', valor: actual.im, estado: actual.estadoIm },
-    { etiqueta: 'Archivos · IA', componente: 'ARCHIVOS', valor: actual.ia, estado: actual.estadoIa },
+    { etiqueta: 'Procesos · IP', ayuda: 'ip', componente: 'PROCESOS', valor: actual.ip, estado: actual.estadoIp },
+    { etiqueta: 'Memoria · IM', ayuda: 'im', componente: 'MEMORIA', valor: actual.im, estado: actual.estadoIm },
+    { etiqueta: 'Archivos · IA', ayuda: 'ia', componente: 'ARCHIVOS', valor: actual.ia, estado: actual.estadoIa },
   ];
 
   return (
@@ -55,6 +58,10 @@ export function IndicadoresTiles({ actual, onSeleccionar }: Props) {
             <div className="lab">
               <span className="swatch" style={{ background: color }} />
               {f.etiqueta}
+              {/* El clic en la ficha no debe abrir el drill-down del tile. */}
+              <span onClick={(e) => e.stopPropagation()}>
+                <FichaConcepto clave={f.ayuda} />
+              </span>
             </div>
             <div className="row">
               <div className="val tnum" style={{ color }}>
@@ -71,8 +78,7 @@ export function IndicadoresTiles({ actual, onSeleccionar }: Props) {
         })}
       </div>
       <div className="note">
-        Los tres indicadores usan la convención de salud: <b>100 = sano</b>. Cuando un valor falta (—) es porque ese
-        componente no se pudo recolectar ese ciclo, no un cero. {onSeleccionar && 'Clic en un tile para ver el detalle crudo.'}
+        <b>100 = sano</b> en los tres. {onSeleccionar && 'Clic en un tile para ver qué lo está puntuando.'}
       </div>
     </section>
   );

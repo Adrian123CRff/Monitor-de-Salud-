@@ -3,6 +3,7 @@ package cr.ac.una.monitor.api.rest;
 import cr.ac.una.monitor.aplicacion.puerto.entrada.ConsultarComponente;
 import cr.ac.una.monitor.aplicacion.puerto.entrada.ConsultarComponente.VariableEvaluada;
 import cr.ac.una.monitor.aplicacion.puerto.entrada.ConsultarComponente.VistaComponente;
+import cr.ac.una.monitor.dominio.calibracion.TipoUmbral;
 import cr.ac.una.monitor.dominio.modelo.Componente;
 import cr.ac.una.monitor.dominio.modelo.InstanciaId;
 import org.junit.jupiter.api.Test;
@@ -70,8 +71,10 @@ class ComponentesControllerTest {
             90.0, false,
             List.of(
                 // redundancia_redo en 0 con peso 0.10 -> se lleva 10 puntos del componente
-                new VariableEvaluada("redundancia_redo", 1.0, 0.0, 0.10, false),
-                new VariableEvaluada("peor_tablespace_pct", 40.0, 100.0, 0.40, false)));
+                new VariableEvaluada("redundancia_redo", 1.0, 0.0, 0.10, false,
+                    TipoUmbral.LINEAL_DIRECTA, 2, 1),
+                new VariableEvaluada("peor_tablespace_pct", 40.0, 100.0, 0.40, false,
+                    TipoUmbral.LINEAL_INVERTIDA, 75, 95)));
         when(consultarComponente.detalle(new InstanciaId(1L), Componente.ARCHIVOS))
             .thenReturn(Map.of("actual", archivos));
 
@@ -82,7 +85,12 @@ class ComponentesControllerTest {
             .andExpect(jsonPath("$.actual.variables[0].puntuacion").value(0.0))
             .andExpect(jsonPath("$.actual.variables[0].valor").value(1.0))
             .andExpect(jsonPath("$.actual.variables[0].aportePerdido").value(10.0))
-            .andExpect(jsonPath("$.actual.variables[1].aportePerdido").value(0.0));
+            .andExpect(jsonPath("$.actual.variables[1].aportePerdido").value(0.0))
+            // Los limites viajan para que la ayuda contextual diga donde esta el
+            // corte sin escribirlo a mano en el frontend.
+            .andExpect(jsonPath("$.actual.variables[1].valorOk").value(75.0))
+            .andExpect(jsonPath("$.actual.variables[1].valorCritico").value(95.0))
+            .andExpect(jsonPath("$.actual.variables[1].tipoUmbral").value("LINEAL_INVERTIDA"));
     }
 
     /** Una muestra que no se pudo puntuar sigue mostrando el crudo, con puntuacion null. */

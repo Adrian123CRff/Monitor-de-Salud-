@@ -105,7 +105,10 @@ public class ConsultarComponenteServicio implements ConsultarComponente {
                 muestra.valores().get(u.variable()),
                 puntuacion,
                 u.pesoEnComponente(),
-                disparoVeto(u, muestra.valores().get(u.variable()), puntuacion)));
+                disparoVeto(u, muestra.valores().get(u.variable()), puntuacion),
+                u.tipo(),
+                u.valorOk(),
+                u.valorCritico()));
         }
 
         // Peor aporte primero: la pantalla debe abrir por lo que está costando

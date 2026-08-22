@@ -67,11 +67,11 @@ describe('ComponenteDetalle -- desglose por variable (pedido del profesor)', () 
       variables: [
         {
           variable: 'redundancia_redo', valor: 1, puntuacion: 0, estado: 'CRITICO',
-          pesoEnComponente: 0.1, aportePerdido: 10, disparoVeto: false,
+          pesoEnComponente: 0.1, aportePerdido: 10, disparoVeto: false, tipoUmbral: 'LINEAL_INVERTIDA', valorOk: 70, valorCritico: 95,
         },
         {
           variable: 'peor_tablespace_pct', valor: 40, puntuacion: 100, estado: 'OPTIMO',
-          pesoEnComponente: 0.4, aportePerdido: 0, disparoVeto: false,
+          pesoEnComponente: 0.4, aportePerdido: 0, disparoVeto: false, tipoUmbral: 'LINEAL_INVERTIDA', valorOk: 70, valorCritico: 95,
         },
       ],
     },
@@ -97,7 +97,7 @@ describe('ComponenteDetalle -- desglose por variable (pedido del profesor)', () 
         variables: [
           {
             variable: 'a2_datafiles_offline', valor: 1, puntuacion: 0, estado: 'CRITICO',
-            pesoEnComponente: 0.2, aportePerdido: 20, disparoVeto: true,
+            pesoEnComponente: 0.2, aportePerdido: 20, disparoVeto: true, tipoUmbral: 'LINEAL_INVERTIDA', valorOk: 70, valorCritico: 95,
           },
         ],
       },
@@ -137,7 +137,7 @@ describe('ComponenteDetalle -- color por estado en los numeros', () => {
       variables: [
         {
           variable: 'pga_uso_pct', valor: 128, puntuacion: 5, estado: 'CRITICO',
-          pesoEnComponente: 0.4, aportePerdido: 38, disparoVeto: false,
+          pesoEnComponente: 0.4, aportePerdido: 38, disparoVeto: false, tipoUmbral: 'LINEAL_INVERTIDA', valorOk: 70, valorCritico: 95,
         },
       ],
     },

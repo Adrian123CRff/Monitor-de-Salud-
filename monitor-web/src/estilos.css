@@ -512,3 +512,115 @@ svg {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* Ayuda contextual: boton "i" + ficha desplegable.
+   Oculta por defecto a proposito -- en una pantalla de vigilancia el texto
+   siempre visible compite con los numeros, que es lo que hay que leer primero. */
+.ayuda {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.ayuda-boton {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.ayuda-boton:hover,
+.ayuda-boton[aria-expanded='true'] {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+.ayuda-boton:focus-visible {
+  outline: 2px solid var(--s1);
+  outline-offset: 2px;
+}
+.ayuda-ficha {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: max-content;
+  max-width: min(340px, 78vw);
+  padding: 13px 15px;
+  font-size: 12.5px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px -8px rgba(0, 0, 0, 0.45);
+  white-space: normal;
+  text-align: left;
+}
+/* Cerca del borde derecho la ficha se ancla al otro lado para no desbordar. */
+.detalle-vista .ayuda-ficha,
+.ayuda-derecha .ayuda-ficha {
+  left: auto;
+  right: 0;
+}
+.ayuda-titulo {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.ayuda-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ayuda-rotulo {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ayuda-trampa {
+  padding: 8px 10px;
+  background: var(--wash);
+  border-left: 2px solid var(--warning);
+  border-radius: 0 4px 4px 0;
+}
+.ayuda-trampa .ayuda-rotulo { color: var(--warning); }
+.ayuda-ficha em {
+  font-style: normal;
+  color: var(--muted);
+}
+.ayuda-origen {
+  padding-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
+/* La ficha de ayuda va FUERA del <label> (si no, contamina el nombre accesible
+   del campo y un clic enfocaria el input). Esta celda las mantiene juntas
+   visualmente. */
+.calibracion-celda {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.calibracion-celda > .calibracion-campo { flex: 1 1 auto; min-width: 0; }
+.calibracion-celda > .ayuda { margin: 1px 0 0; order: 2; }

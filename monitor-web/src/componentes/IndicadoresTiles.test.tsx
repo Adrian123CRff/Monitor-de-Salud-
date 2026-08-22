@@ -21,9 +21,12 @@ const isbd: Isbd = {
 
 describe('IndicadoresTiles', () => {
   it('sin onSeleccionar, los tiles no son clicables', () => {
-    render(<IndicadoresTiles actual={isbd} />);
+    const { container } = render(<IndicadoresTiles actual={isbd} />);
 
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    // Los tiles llevan botones de ayuda dentro, asi que la pregunta no es "hay
+    // algun boton" sino "es el tile en si un boton".
+    expect(container.querySelector('.tile[role="button"]')).toBeNull();
+    expect(container.querySelector('.tile-clicable')).toBeNull();
   });
 
   it('con onSeleccionar, un clic en un tile pasa el componente correcto', () => {

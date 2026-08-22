@@ -8,6 +8,7 @@ import {
   INTERVALO_REFRESCO_MS,
   formatoNumero,
 } from '../utilidades';
+import { FichaConcepto } from './Fichas';
 
 /** Peor primero es el defecto: en una pantalla de vigilancia, lo que está mal va arriba. */
 type Orden = 'PEOR_PRIMERO' | 'MEJOR_PRIMERO';
@@ -79,7 +80,10 @@ export function VistaInstancias({ onSeleccionar }: Props) {
   return (
     <>
       <header>
-        <h1>Monitor de Salud de Oracle</h1>
+        <h1>
+          Monitor de Salud de Oracle
+          <FichaConcepto clave="vistaGeneral" />
+        </h1>
         <span className="badge">
           <span className={`dot pulse${error ? ' critico' : ''}`} />
           {error ? 'sin conexión' : 'conectado'}

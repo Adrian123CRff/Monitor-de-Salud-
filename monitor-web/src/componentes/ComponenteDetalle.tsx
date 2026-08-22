@@ -1,5 +1,6 @@
 import type { Componente, Muestra, VariableEvaluada } from '../api/tipos';
 import { COLOR_ESTADO, ETIQUETA_ESTADO, formatoNumero, hace } from '../utilidades';
+import { FichaConcepto, FichaVariable } from './Fichas';
 
 interface Props {
   componente: Componente;
@@ -66,7 +67,10 @@ export function ComponenteDetalle({ componente, detalle, cargando, error, onCerr
 
               {muestra.variables.length > 0 && (
                 <>
-                  <div className="sublab">Qué está puntuando</div>
+                  <div className="sublab">
+                    Qué está puntuando
+                    <FichaConcepto clave="desglose" />
+                  </div>
                   <table className="detalle-tabla desglose">
                     <thead>
                       <tr>
@@ -91,7 +95,10 @@ export function ComponenteDetalle({ componente, detalle, cargando, error, onCerr
                 </p>
               )}
 
-              <div className="sublab">Dato crudo de Oracle</div>
+              <div className="sublab">
+                Dato crudo de Oracle
+                <FichaConcepto clave="crudo" />
+              </div>
               <table className="detalle-tabla">
                 <tbody>
                   {Object.entries(muestra.valores)
@@ -105,7 +112,10 @@ export function ComponenteDetalle({ componente, detalle, cargando, error, onCerr
                       const estado = estadoPorVariable.get(variable);
                       return (
                         <tr key={variable}>
-                          <td className="muted">{variable}</td>
+                          <td className="muted">
+                            {variable}
+                            <FichaVariable variable={variable} />
+                          </td>
                           <td
                             className="tnum detalle-valor"
                             style={estado ? { color: COLOR_ESTADO[estado] } : undefined}
@@ -137,6 +147,12 @@ function FilaVariable({ v }: { v: VariableEvaluada }) {
     <tr>
       <td>
         {v.variable}
+        <FichaVariable
+          variable={v.variable}
+          valorOk={v.valorOk}
+          valorCritico={v.valorCritico}
+          pesoEnComponente={v.pesoEnComponente}
+        />
         {v.disparoVeto && (
           <span className="chip veto" title="Esta variable veta el componente entero">
             veto

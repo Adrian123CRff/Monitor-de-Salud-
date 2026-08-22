@@ -8,6 +8,7 @@ import {
   obtenerTablespaces,
   SinDatosAunError,
 } from '../api/cliente';
+import { FichaConcepto } from './Fichas';
 import type { Alerta, Componente, Isbd, Muestra, Tablespace } from '../api/tipos';
 import { INTERVALO_REFRESCO_MS, hace } from '../utilidades';
 import { AlertasPanel } from './AlertasPanel';
@@ -213,7 +214,10 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
 
           <section className="card c12">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>
-              <h2 style={{ fontSize: 15 }}>Evolución — últimas {VENTANA_HISTORICO_HORAS} h</h2>
+              <h2 style={{ fontSize: 15 }}>
+                Evolución — últimas {VENTANA_HISTORICO_HORAS} h
+                <FichaConcepto clave="historico" />
+              </h2>
               <div className="legend" style={{ marginLeft: 'auto' }}>
                 <span>
                   <span className="swatch" style={{ background: 'var(--s1)' }} />

@@ -1,5 +1,6 @@
 import type { Tablespace } from '../api/tipos';
 import { colorTablespace, formatoBytes } from '../utilidades';
+import { FichaConcepto } from './Fichas';
 
 interface Props {
   tablespaces: Tablespace[];
@@ -12,7 +13,10 @@ export function TablespacesPanel({ tablespaces, error }: Props) {
   return (
     <section className="card c6">
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ fontSize: 15 }}>Tablespaces</h2>
+        <h2 style={{ fontSize: 15 }}>
+          Tablespaces{' '}
+          <FichaConcepto clave="tablespaces" />
+        </h2>
         <span className="muted" style={{ fontSize: 12 }}>
           ordenados por % usado, peor primero
         </span>
