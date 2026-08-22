@@ -624,3 +624,40 @@ svg {
 }
 .calibracion-celda > .calibracion-campo { flex: 1 1 auto; min-width: 0; }
 .calibracion-celda > .ayuda { margin: 1px 0 0; order: 2; }
+
+/* Calibracion: el total en vivo, junto a los campos.
+   Antes el unico aviso estaba al pie del panel y el boton se deshabilitaba sin
+   decir por que -- se sentia como que la pantalla no respondia. */
+.calibracion-suma {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.calibracion-suma strong { font-size: 15px; }
+.calibracion-suma .calibracion-pista { color: var(--ink-2); }
+.calibracion-suma.ok {
+  border-color: color-mix(in srgb, var(--good) 45%, transparent);
+  background: color-mix(in srgb, var(--good) 8%, transparent);
+}
+.calibracion-suma.ok strong { color: var(--good); }
+.calibracion-suma.mal {
+  border-color: color-mix(in srgb, var(--critical) 45%, transparent);
+  background: color-mix(in srgb, var(--critical) 8%, transparent);
+}
+.calibracion-suma.mal strong { color: var(--critical); }
+
+.calibracion-campo.campo-invalido input[type='number'] {
+  border-color: var(--critical);
+}
+/* El boton sigue siendo pulsable (ver aria-disabled) para poder explicar por
+   que no guarda; se ve apagado, pero no muerto. */
+.boton-bloqueado {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

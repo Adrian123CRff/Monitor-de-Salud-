@@ -12,6 +12,13 @@ export function CalibracionPanel({ onCerrar }: { onCerrar: () => void }) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guardado, setGuardado] = useState(false);
+  /**
+   * Se intentó guardar con la calibración inválida. Sirve para responder al
+   * clic en vez de dejar el botón mudo: un botón deshabilitado no dispara
+   * ningún evento, así que quien lo pulsa no recibe explicación de por qué no
+   * pasa nada.
+   */
+  const [intentoInvalido, setIntentoInvalido] = useState(false);
 
   useEffect(() => {
     obtenerCalibracion()
@@ -24,10 +31,16 @@ export function CalibracionPanel({ onCerrar }: { onCerrar: () => void }) {
     const num = Number(valor);
     setCalibracion((c) => (c ? { ...c, pesos: { ...c.pesos, [componente]: Number.isFinite(num) ? num : 0 } } : c));
     setGuardado(false);
+    setIntentoInvalido(false);
   }
 
   async function guardar() {
     if (!calibracion) return;
+    if (!valido) {
+      setIntentoInvalido(true);
+      return;
+    }
+    setIntentoInvalido(false);
     setGuardando(true);
     setError(null);
     try {
@@ -42,7 +55,25 @@ export function CalibracionPanel({ onCerrar }: { onCerrar: () => void }) {
   }
 
   const suma = calibracion ? COMPONENTES.reduce((s, c) => s + (calibracion.pesos[c] ?? 0), 0) : 0;
-  const sumaValida = Math.abs(suma - 1) < 0.001;
+  const diferencia = suma - 1;
+  const sumaValida = Math.abs(diferencia) < 0.001;
+
+  // El backend ya rechaza un peso en 0 (Calibracion exige que cada uno sea > 0:
+  // un componente con peso 0 desaparece del índice y podría estar en llamas sin
+  // que el ISBD se entere). Se comprueba también aquí para que el aviso llegue
+  // mientras se escribe, y no como un error del servidor después de guardar.
+  const pesosEnCero = calibracion
+    ? COMPONENTES.filter((c) => (calibracion.pesos[c] ?? 0) <= 0)
+    : [];
+  const valido = sumaValida && pesosEnCero.length === 0;
+
+  const motivoInvalido = !sumaValida
+    ? diferencia > 0
+      ? `Los pesos suman ${suma.toFixed(2)}: te sobra ${diferencia.toFixed(2)}. Bajá alguno hasta que sumen 1.00.`
+      : `Los pesos suman ${suma.toFixed(2)}: te falta ${Math.abs(diferencia).toFixed(2)}. Subí alguno hasta que sumen 1.00.`
+    : pesosEnCero.length > 0
+      ? `${pesosEnCero.join(' y ')} en 0: un componente con peso 0 desaparece del índice. Todos deben ser mayores que 0.`
+      : null;
 
   return (
     <section className="card c12">
@@ -70,7 +101,7 @@ export function CalibracionPanel({ onCerrar }: { onCerrar: () => void }) {
                     boton enfocaria el input en vez de abrir la ayuda.
                     Una sola para los tres: el concepto de "peso" es el mismo. */}
                 {c === COMPONENTES[0] && <FichaControl clave="pesos" />}
-                <label className="calibracion-campo">
+                <label className={`calibracion-campo${valido ? '' : ' campo-invalido'}`}>
                   <span>{c}</span>
                   <input
                     type="number"
@@ -79,6 +110,7 @@ export function CalibracionPanel({ onCerrar }: { onCerrar: () => void }) {
                     max="1"
                     value={calibracion.pesos[c] ?? 0}
                     onChange={(e) => actualizarPeso(c, e.target.value)}
+                    aria-invalid={!valido}
                   />
                 </label>
               </div>
@@ -117,17 +149,46 @@ export function CalibracionPanel({ onCerrar }: { onCerrar: () => void }) {
             </div>
           </div>
 
-          {!sumaValida && (
-            <p className="calibracion-mensaje calibracion-error">
-              Los pesos de procesos, memoria y archivos deben sumar 1.0 (suman {suma.toFixed(2)}).
+          {/* El total va junto a los campos, no al pie del panel: es donde está
+              mirando quien acaba de escribir un número. Antes el aviso quedaba
+              debajo de todo y el efecto era que el boton "no hacia nada". */}
+          <p className={`calibracion-suma${valido ? ' ok' : ' mal'}`} aria-live="polite">
+            <span>Suma de los pesos</span>
+            <strong className="tnum">{suma.toFixed(2)}</strong>
+            {valido ? (
+              <span className="calibracion-pista">correcto, deben sumar 1.00</span>
+            ) : (
+              <span className="calibracion-pista">{motivoInvalido}</span>
+            )}
+          </p>
+
+          {error && (
+            <p className="calibracion-mensaje calibracion-error" role="alert">
+              {error}
             </p>
           )}
-          {error && <p className="calibracion-mensaje calibracion-error">{error}</p>}
-          {guardado && !error && <p className="calibracion-mensaje">Calibración guardada.</p>}
+          {guardado && !error && (
+            <p className="calibracion-mensaje" role="status">
+              Calibración guardada.
+            </p>
+          )}
 
-          <button onClick={guardar} disabled={!sumaValida || guardando} style={{ marginTop: 10 }}>
+          {/* aria-disabled en vez de disabled: un boton deshabilitado no recibe
+              foco ni dispara clic, asi que no puede explicar por que no guarda.
+              Asi sigue siendo alcanzable y responde con el motivo. */}
+          <button
+            onClick={guardar}
+            aria-disabled={!valido || guardando}
+            className={valido ? undefined : 'boton-bloqueado'}
+            style={{ marginTop: 10 }}
+          >
             {guardando ? 'Guardando…' : 'Guardar calibración'}
           </button>
+          {intentoInvalido && motivoInvalido && (
+            <p className="calibracion-mensaje calibracion-error" role="alert">
+              No se guardó: {motivoInvalido}
+            </p>
+          )}
         </>
       )}
     </section>
