@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import javax.sql.DataSource;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Comparator;
@@ -91,6 +92,25 @@ public class JdbcRepositorioAlertas implements RepositorioAlertas {
             .comparingInt((Alerta a) -> a.nivel().ordinal()).reversed()
             .thenComparing(Alerta::abiertaEn);
         return abiertas.stream().sorted(porSeveridadLuegoDuracion).toList();
+    }
+
+    @Override
+    public List<Alerta> enRango(InstanciaId instancia, Instant desde, Instant hasta) {
+        // Interseccion de intervalos: abrio antes de que la ventana termine, y
+        // cerro despues de que empiece (o sigue abierto). Ordenado por apertura
+        // porque quien lo consume dibuja una linea de tiempo.
+        return jdbc.sql("""
+                SELECT * FROM monitor_alertas
+                WHERE instancia_id = :instancia_id
+                  AND abierta_en <= :hasta
+                  AND (cerrada_en IS NULL OR cerrada_en >= :desde)
+                ORDER BY abierta_en
+                """)
+            .param("instancia_id", instancia.valor())
+            .param("desde", OffsetDateTime.ofInstant(desde, ZoneOffset.UTC))
+            .param("hasta", OffsetDateTime.ofInstant(hasta, ZoneOffset.UTC))
+            .query(this::mapear)
+            .list();
     }
 
     private Alerta mapear(ResultSet rs, int rowNum) throws SQLException {

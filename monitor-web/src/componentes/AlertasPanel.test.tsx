@@ -14,6 +14,7 @@ function alerta(sobrescribe: Partial<Alerta>): Alerta {
     umbral: 98,
     descripcion: 'Tablespace SYSTEM al 98.2%',
     abiertaEn: new Date().toISOString(),
+    cerradaEn: null,
     ...sobrescribe,
   };
 }

@@ -168,6 +168,12 @@ class MuestrearInstanciaServicioTest {
         public List<Alerta> abiertas(InstanciaId instancia) {
             return List.copyOf(alertasAbiertas.values());
         }
+
+        @Override
+        public List<Alerta> enRango(InstanciaId instancia, Instant desde, Instant hasta) {
+            // El muestreo no consulta rangos: eso lo hace el grafico de evolucion.
+            return List.of();
+        }
     };
 
     private final RepositorioCalibracion calibracionFalsa = new RepositorioCalibracion() {

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import java.sql.Connection;
 import java.sql.Statement;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -90,6 +91,7 @@ class JdbcRepositorioAlertasIT {
         st.execute("""
             DELETE FROM monitor_alertas
             WHERE variable IN ('peor_tablespace_pct_it', 'a2_datafiles_offline_it', 'orden_test_it')
+               OR variable LIKE 'it_rango_%'
             """);
     }
 
@@ -182,5 +184,44 @@ class JdbcRepositorioAlertasIT {
             }
         }
         throw new AssertionError("No se encontró " + variable + " entre las abiertas");
+    }
+
+    /**
+     * enRango busca SOLAPE, no contencion: un episodio que empezo antes de la
+     * ventana y sigue abierto afecta a esa ventana y tiene que salir. Si se
+     * filtrara por "abierta_en entre desde y hasta", el grafico de evolucion
+     * perderia justamente los incidentes largos, que son los que importan.
+     */
+    @Test
+    void enRango_devuelve_los_episodios_que_se_solapan_con_la_ventana() throws Exception {
+        Instant ahora = Instant.now();
+        Instant desde = ahora.minus(Duration.ofHours(2));
+        Instant hasta = ahora;
+
+        // Dentro: abrio y cerro dentro de la ventana.
+        Alerta dentro = repositorio.abrir(alertaDe("it_rango_dentro",
+            ahora.minus(Duration.ofMinutes(90))));
+        repositorio.cerrar(dentro, ahora.minus(Duration.ofMinutes(60)));
+
+        // Solapa por la izquierda: abrio ANTES de la ventana y sigue abierta.
+        repositorio.abrir(alertaDe("it_rango_solapa", ahora.minus(Duration.ofHours(9))));
+
+        // Fuera: abrio y cerro mucho antes.
+        Alerta fuera = repositorio.abrir(alertaDe("it_rango_fuera",
+            ahora.minus(Duration.ofHours(9))));
+        repositorio.cerrar(fuera, ahora.minus(Duration.ofHours(8)));
+
+        List<String> variables = repositorio.enRango(INSTANCIA, desde, hasta).stream()
+            .map(Alerta::variable)
+            .filter(v -> v.startsWith("it_rango_"))
+            .toList();
+
+        assertThat(variables).contains("it_rango_dentro", "it_rango_solapa");
+        assertThat(variables).doesNotContain("it_rango_fuera");
+    }
+
+    private Alerta alertaDe(String variable, Instant abiertaEn) {
+        return new Alerta(null, INSTANCIA, Componente.MEMORIA, variable, Optional.empty(),
+            Nivel.ADVERTENCIA, 1.0, 1.0, "episodio de prueba", abiertaEn, Optional.empty());
     }
 }

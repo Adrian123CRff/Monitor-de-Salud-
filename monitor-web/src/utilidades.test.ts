@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { colorTablespace, formatoBytes, formatoNumero, hace } from './utilidades';
+import { colorTablespace, formatoBytes, formatoNumero, hace, tendenciaDe } from './utilidades';
 
 describe('colorTablespace', () => {
   it.each([
@@ -69,5 +69,39 @@ describe('formatoBytes', () => {
 
   it('sin decimal cuando el valor en la unidad ya es >=10', () => {
     expect(formatoBytes(500 * 1024 * 1024)).toBe('500 MB');
+  });
+});
+
+describe('tendenciaDe -- responde "¿la salud esta empeorando?" (§23)', () => {
+  const serie = (...v: number[]) => v;
+
+  it('con muy pocos puntos no inventa una tendencia', () => {
+    expect(tendenciaDe(serie(90, 80, 70))).toBeNull();
+  });
+
+  it('detecta que empeora', () => {
+    const t = tendenciaDe(serie(95, 96, 95, 90, 88, 85, 80, 78, 75));
+    expect(t?.direccion).toBe('EMPEORA');
+    expect(t?.delta).toBeLessThan(0);
+  });
+
+  it('detecta que mejora', () => {
+    const t = tendenciaDe(serie(60, 62, 61, 70, 75, 78, 88, 90, 92));
+    expect(t?.direccion).toBe('MEJORA');
+    expect(t?.delta).toBeGreaterThan(0);
+  });
+
+  it('el ruido normal del muestreo se lee como estable, no como tendencia', () => {
+    const t = tendenciaDe(serie(95, 94.6, 95.2, 94.8, 95.1, 94.9, 95.3, 94.7, 95));
+    expect(t?.direccion).toBe('ESTABLE');
+  });
+
+  /**
+   * La razon de comparar promedios de tercios en vez del primer punto contra el
+   * ultimo: un solo pico no debe decidir el veredicto de toda la ventana.
+   */
+  it('un pico aislado no cambia el veredicto', () => {
+    const t = tendenciaDe(serie(95, 95, 95, 95, 40, 95, 95, 95, 95));
+    expect(t?.direccion).toBe('ESTABLE');
   });
 });

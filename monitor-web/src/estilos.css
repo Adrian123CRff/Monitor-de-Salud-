@@ -661,3 +661,35 @@ svg {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* Selector de ventana del grafico de evolucion. La de 7 dias existe por la
+   ultima pregunta del §23: un patron horario no se ve en 24 h. */
+.ventanas { display: inline-flex; gap: 6px; margin-left: auto; }
+.ventanas .win {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: var(--radius);
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ventanas .win[aria-pressed='true'] {
+  border-color: var(--ink-2);
+  color: var(--ink);
+  background: var(--wash);
+}
+.ventanas .win:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
+
+/* Veredicto de tendencia: la respuesta a "¿la salud esta empeorando?". */
+.historico-veredicto {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+.veredicto-mejora { color: var(--good); }
+.veredicto-estable { color: var(--ink-2); }
+.veredicto-empeora { color: var(--serious); }

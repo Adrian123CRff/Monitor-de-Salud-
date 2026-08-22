@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   forzarMuestreo,
   obtenerAlertas,
+  obtenerAlertasEnRango,
   obtenerComponente,
   obtenerHistorico,
   obtenerSalud,
@@ -19,7 +20,16 @@ import { IndicadoresTiles } from './IndicadoresTiles';
 import { IsbdHero } from './IsbdHero';
 import { TablespacesPanel } from './TablespacesPanel';
 
-const VENTANA_HISTORICO_HORAS = 24;
+/**
+ * Ventanas del gráfico de evolución. La de 7 días existe por la última pregunta
+ * del §23 ("¿los problemas aparecen en determinados horarios?"): con 24 h no se
+ * puede ver un patrón horario, hacen falta varios días.
+ */
+const VENTANAS = [
+  { horas: 1, etiqueta: '1 h' },
+  { horas: 24, etiqueta: '24 h' },
+  { horas: 24 * 7, etiqueta: '7 d' },
+] as const;
 
 interface Props {
   instanciaId: number;
@@ -32,6 +42,7 @@ interface Estado {
   historico: Isbd[];
   tablespaces: Tablespace[];
   alertas: Alerta[];
+  alertasDelRango: Alerta[];
   sinDatos: boolean;
   error: string | null;
   cargando: boolean;
@@ -62,6 +73,7 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
     historico: [],
     tablespaces: [],
     alertas: [],
+    alertasDelRango: [],
     sinDatos: false,
     error: null,
     cargando: true,
@@ -69,6 +81,7 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
     errorTablespaces: null,
     errorAlertas: null,
   });
+  const [ventanaHoras, setVentanaHoras] = useState<number>(24);
   const [muestreando, setMuestreando] = useState(false);
   const [calibracionAbierta, setCalibracionAbierta] = useState(false);
   const [componenteSeleccionado, setComponenteSeleccionado] = useState<Componente | null>(null);
@@ -78,7 +91,7 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
 
   const refrescar = useCallback(async () => {
     const hasta = new Date();
-    const desde = new Date(hasta.getTime() - VENTANA_HISTORICO_HORAS * 60 * 60 * 1000);
+    const desde = new Date(hasta.getTime() - ventanaHoras * 60 * 60 * 1000);
 
     try {
       const isbd = await obtenerSalud(instanciaId);
@@ -86,13 +99,17 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
         [historico, errorHistorico],
         [tablespaces, errorTablespaces],
         [alertas, errorAlertas],
+        // Separado de "alertas": el panel muestra lo que está roto ahora, el
+        // gráfico necesita también los episodios ya cerrados de la ventana.
+        [alertasDelRango],
       ] = await Promise.all([
         cargarSeguro(obtenerHistorico(desde, hasta, instanciaId), [] as Isbd[]),
         cargarSeguro(obtenerTablespaces(instanciaId), [] as Tablespace[]),
         cargarSeguro(obtenerAlertas(instanciaId), [] as Alerta[]),
+        cargarSeguro(obtenerAlertasEnRango(desde, hasta, instanciaId), [] as Alerta[]),
       ]);
       setEstado({
-        isbd, historico, tablespaces, alertas, sinDatos: false, error: null, cargando: false,
+        isbd, historico, tablespaces, alertas, alertasDelRango, sinDatos: false, error: null, cargando: false,
         errorHistorico, errorTablespaces, errorAlertas,
       });
     } catch (e) {
@@ -102,7 +119,7 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
         setEstado((s) => ({ ...s, error: e instanceof Error ? e.message : String(e), cargando: false }));
       }
     }
-  }, [instanciaId]);
+  }, [instanciaId, ventanaHoras]);
 
   useEffect(() => {
     // instanciaId cambia solo si el usuario vuelve a la vista general y entra
@@ -215,9 +232,21 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
           <section className="card c12">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>
               <h2 style={{ fontSize: 15 }}>
-                Evolución — últimas {VENTANA_HISTORICO_HORAS} h
+                Evolución
                 <FichaConcepto clave="historico" />
               </h2>
+              <div className="ventanas" role="group" aria-label="Ventana de tiempo del gráfico">
+                {VENTANAS.map((v) => (
+                  <button
+                    key={v.horas}
+                    className="win"
+                    aria-pressed={ventanaHoras === v.horas}
+                    onClick={() => setVentanaHoras(v.horas)}
+                  >
+                    {v.etiqueta}
+                  </button>
+                ))}
+              </div>
               <div className="legend" style={{ marginLeft: 'auto' }}>
                 <span>
                   <span className="swatch" style={{ background: 'var(--s1)' }} />
@@ -240,7 +269,7 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
             {estado.errorHistorico ? (
               <div className="panel-error">No se pudo cargar el histórico: {estado.errorHistorico}</div>
             ) : (
-              <HistoricoChart historico={estado.historico} />
+              <HistoricoChart historico={estado.historico} alertas={estado.alertasDelRango} />
             )}
           </section>
 

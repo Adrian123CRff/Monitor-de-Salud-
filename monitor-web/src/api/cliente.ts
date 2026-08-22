@@ -44,6 +44,16 @@ export function obtenerAlertas(instancia = INSTANCIA_ID): Promise<Alerta[]> {
   return obtener<Alerta[]>(`${BASE}/instancias/${instancia}/alertas`);
 }
 
+/**
+ * Episodios que se solapan con la ventana, abiertos o ya cerrados -- los que
+ * marca el gráfico de evolución. Distinto de obtenerAlertas(), que solo trae
+ * lo que está roto AHORA.
+ */
+export function obtenerAlertasEnRango(desde: Date, hasta: Date, instancia = INSTANCIA_ID): Promise<Alerta[]> {
+  const parametros = new URLSearchParams({ desde: desde.toISOString(), hasta: hasta.toISOString() });
+  return obtener<Alerta[]>(`${BASE}/instancias/${instancia}/alertas?${parametros}`);
+}
+
 export async function forzarMuestreo(instancia = INSTANCIA_ID): Promise<Isbd> {
   const resp = await fetch(`${BASE}/instancias/${instancia}/muestrear`, { method: 'POST' });
   if (!resp.ok) {

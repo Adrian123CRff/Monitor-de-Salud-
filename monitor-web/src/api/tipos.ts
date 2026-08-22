@@ -63,6 +63,8 @@ export interface Alerta {
   umbral: number;
   descripcion: string;
   abiertaEn: string; // ISO-8601
+  /** null mientras el episodio sigue abierto. */
+  cerradaEn: string | null;
 }
 
 /** Forma de error uniforme del backend (ProblemDetail, RFC 9457). */
