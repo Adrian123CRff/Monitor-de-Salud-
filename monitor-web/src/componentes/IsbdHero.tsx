@@ -15,7 +15,12 @@ export function IsbdHero({ isbd }: { isbd: Isbd }) {
         </div>
       )}
       <div className="hero" style={{ marginTop: 10 }}>
-        <div className="fig tnum">{formatoNumero(isbd.puntuacion, 1)}</div>
+        {/* El numero lleva el color de su estado: el profesor pidio poder leer
+            la gravedad sin tener que interpretar la cifra. El chip de al lado
+            sigue nombrando el estado, para no depender solo del color. */}
+        <div className="fig tnum" style={{ color }}>
+          {formatoNumero(isbd.puntuacion, 1)}
+        </div>
         <div>
           <span className="chip" style={{ color, borderColor: color }}>
             {ETIQUETA_ESTADO[isbd.estado]}

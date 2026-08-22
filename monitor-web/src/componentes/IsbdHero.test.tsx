@@ -58,3 +58,21 @@ describe('IsbdHero', () => {
     expect(screen.getByText('Tablespace SYSTEM al 98.2%')).toBeInTheDocument();
   });
 });
+
+describe('IsbdHero -- numero coloreado (pedido del profesor)', () => {
+  it('el numero del ISBD lleva el color de su estado, no un color fijo', () => {
+    const critico: Isbd = { ...base, puntuacion: 22.4, estado: 'CRITICO' };
+
+    render(<IsbdHero isbd={critico} />);
+
+    expect(screen.getByText('22.4')).toHaveStyle({ color: 'var(--critical)' });
+  });
+
+  it('el mismo numero en otro estado cambia de color', () => {
+    const optimo: Isbd = { ...base, puntuacion: 96.1, estado: 'OPTIMO' };
+
+    render(<IsbdHero isbd={optimo} />);
+
+    expect(screen.getByText('96.1')).toHaveStyle({ color: 'var(--optimo)' });
+  });
+});

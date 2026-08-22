@@ -123,3 +123,40 @@ describe('ComponenteDetalle -- desglose por variable (pedido del profesor)', () 
     expect(screen.getByText('m5_pga_asignada_bytes')).toBeInTheDocument();
   });
 });
+
+describe('ComponenteDetalle -- color por estado en los numeros', () => {
+  const memoria: Record<string, Muestra> = {
+    actual: {
+      componente: 'MEMORIA',
+      momento: '2026-08-16T10:00:00Z',
+      // pga_uso_pct puntua; m1_sga_total_bytes es contexto puro.
+      valores: { pga_uso_pct: 128, m1_sga_total_bytes: 1600000000 },
+      puntuacion: 20,
+      estado: 'CRITICO',
+      vetado: false,
+      variables: [
+        {
+          variable: 'pga_uso_pct', valor: 128, puntuacion: 5, estado: 'CRITICO',
+          pesoEnComponente: 0.4, aportePerdido: 38, disparoVeto: false,
+        },
+      ],
+    },
+  };
+
+  it('colorea el crudo de una variable que puntua', () => {
+    render(<ComponenteDetalle componente="MEMORIA" detalle={memoria} cargando={false} error={null} onCerrar={vi.fn()} />);
+
+    // Aparece dos veces (desglose y crudo); ambas en rojo.
+    const celdas = screen.getAllByText('128');
+    expect(celdas.length).toBeGreaterThanOrEqual(2);
+    celdas.forEach((c) => expect(c).toHaveStyle({ color: 'var(--critical)' }));
+  });
+
+  it('NO colorea una variable de contexto: no tiene estado que mostrar', () => {
+    render(<ComponenteDetalle componente="MEMORIA" detalle={memoria} cargando={false} error={null} onCerrar={vi.fn()} />);
+
+    const contexto = screen.getByText('1600000000');
+    expect(contexto).not.toHaveStyle({ color: 'var(--critical)' });
+    expect(contexto).not.toHaveStyle({ color: 'var(--optimo)' });
+  });
+});

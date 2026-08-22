@@ -154,7 +154,10 @@ export function VistaInstancias({ onSeleccionar }: Props) {
                     <span className="chip" style={{ color: COLOR_ESTADO[i.salud.estado], borderColor: COLOR_ESTADO[i.salud.estado] }}>
                       {ETIQUETA_ESTADO[i.salud.estado]}
                     </span>
-                    <div className="val tnum" style={{ fontSize: 22 }}>
+                    <div
+                      className="val tnum"
+                      style={{ fontSize: 22, color: COLOR_ESTADO[i.salud.estado] }}
+                    >
                       {formatoNumero(i.salud.puntuacion, 1)}
                     </div>
                   </div>

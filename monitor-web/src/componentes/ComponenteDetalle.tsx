@@ -44,7 +44,12 @@ export function ComponenteDetalle({ componente, detalle, cargando, error, onCerr
 
       {!cargando && !error && detalle && Object.keys(detalle).length > 0 && (
         <div className="detalle-grid">
-          {Object.entries(detalle).map(([vista, muestra]) => (
+          {Object.entries(detalle).map(([vista, muestra]) => {
+            // El desglose ya trae el estado resuelto de cada variable que
+            // puntua; se reusa para pintar tambien su fila en el crudo, y asi
+            // las dos tablas cuentan la misma historia.
+            const estadoPorVariable = new Map(muestra.variables.map((v) => [v.variable, v.estado]));
+            return (
             <div className="detalle-vista" key={vista}>
               <div className="lab">{ETIQUETA_VISTA[vista] ?? vista}</div>
               <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
@@ -91,16 +96,30 @@ export function ComponenteDetalle({ componente, detalle, cargando, error, onCerr
                 <tbody>
                   {Object.entries(muestra.valores)
                     .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([variable, valor]) => (
-                      <tr key={variable}>
-                        <td className="muted">{variable}</td>
-                        <td className="tnum detalle-valor">{valor}</td>
-                      </tr>
-                    ))}
+                    .map(([variable, valor]) => {
+                      // Solo se colorea lo que tiene un estado detras. Un
+                      // m1_sga_total_bytes no esta ni bien ni mal -- pintarlo
+                      // de verde seria inventar una evaluacion que nadie hizo,
+                      // y de paso le quitaria fuerza al rojo de las que si
+                      // estan fuera de limites.
+                      const estado = estadoPorVariable.get(variable);
+                      return (
+                        <tr key={variable}>
+                          <td className="muted">{variable}</td>
+                          <td
+                            className="tnum detalle-valor"
+                            style={estado ? { color: COLOR_ESTADO[estado] } : undefined}
+                          >
+                            {valor}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>
@@ -124,7 +143,9 @@ function FilaVariable({ v }: { v: VariableEvaluada }) {
           </span>
         )}
       </td>
-      <td className="tnum detalle-valor">{v.valor === null ? '—' : v.valor}</td>
+      <td className="tnum detalle-valor" style={{ color }}>
+        {v.valor === null ? '—' : v.valor}
+      </td>
       <td className="tnum" style={{ color }}>
         {formatoNumero(v.puntuacion)}
       </td>
