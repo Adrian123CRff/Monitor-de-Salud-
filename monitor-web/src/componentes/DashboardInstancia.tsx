@@ -15,7 +15,7 @@ import { INTERVALO_REFRESCO_MS, hace } from '../utilidades';
 import { AlertasPanel } from './AlertasPanel';
 import { CalibracionPanel } from './CalibracionPanel';
 import { ComponenteDetalle } from './ComponenteDetalle';
-import { HistoricoChart } from './HistoricoChart';
+import { HistoricoChart, MuestraDeTrazo, TRAZOS } from './HistoricoChart';
 import { IndicadoresTiles } from './IndicadoresTiles';
 import { IsbdHero } from './IsbdHero';
 import { TablespacesPanel } from './TablespacesPanel';
@@ -247,23 +247,18 @@ export function DashboardInstancia({ instanciaId, alias, onVolver }: Props) {
                   </button>
                 ))}
               </div>
-              <div className="legend" style={{ marginLeft: 'auto' }}>
-                <span>
-                  <span className="swatch" style={{ background: 'var(--s1)' }} />
-                  ISBD
-                </span>
-                <span>
-                  <span className="swatch" style={{ background: 'var(--s2)' }} />
-                  Procesos
-                </span>
-                <span>
-                  <span className="swatch" style={{ background: 'var(--s3)' }} />
-                  Memoria
-                </span>
-                <span>
-                  <span className="swatch" style={{ background: 'var(--s4)' }} />
-                  Archivos
-                </span>
+              {/* La leyenda reproduce el TRAZO de cada línea, no un cuadrito de
+                  color: desde que los componentes se dibujan en gris y se
+                  distinguen por el patrón, unos cuadros de colores decían lo
+                  contrario de lo que muestra el gráfico. Además el patrón
+                  funciona para quien no distingue los colores. */}
+              <div className="legend leyenda-trazos" style={{ marginLeft: 'auto' }}>
+                {TRAZOS.map((t) => (
+                  <span key={t.etiqueta}>
+                    <MuestraDeTrazo etiqueta={t.etiqueta} />
+                    {t.etiqueta}
+                  </span>
+                ))}
               </div>
             </div>
             {estado.errorHistorico ? (

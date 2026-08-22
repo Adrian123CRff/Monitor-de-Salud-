@@ -26,6 +26,40 @@ interface Serie {
 }
 
 /**
+ * Cómo se dibuja cada línea. Exportado a propósito: la leyenda lo consume para
+ * pintar una muestra del trazo REAL en vez de describirlo por su cuenta.
+ *
+ * Antes la leyenda tenía cuadritos de colores propios y el gráfico dibujaba
+ * gris punteado -- decían cosas distintas. Con una sola definición no pueden
+ * volver a separarse.
+ */
+export const TRAZOS = [
+  { etiqueta: 'ISBD', principal: true, guion: undefined },
+  { etiqueta: 'Procesos', principal: false, guion: '5 4' },
+  { etiqueta: 'Memoria', principal: false, guion: '1 3' },
+  { etiqueta: 'Archivos', principal: false, guion: '6 3 1 3' },
+] as const;
+
+/** Muestra del trazo para la leyenda: el mismo patrón que dibuja el svg. */
+export function MuestraDeTrazo({ etiqueta }: { etiqueta: string }) {
+  const trazo = TRAZOS.find((t) => t.etiqueta === etiqueta);
+  if (!trazo) return null;
+  return (
+    <svg width="20" height="8" aria-hidden="true" style={{ verticalAlign: 'middle', marginRight: 6 }}>
+      <line
+        x1="0"
+        y1="4"
+        x2="20"
+        y2="4"
+        stroke={trazo.principal ? 'var(--s1)' : 'var(--muted)'}
+        strokeWidth={trazo.principal ? 2.5 : 1.5}
+        strokeDasharray={trazo.guion}
+      />
+    </svg>
+  );
+}
+
+/**
  * Evolución del ISBD y sus componentes (§23 del enunciado).
  *
  * El §23 no pide "un gráfico": pide responder preguntas concretas -- ¿la salud
@@ -56,12 +90,16 @@ export function HistoricoChart({ historico, alertas = [] }: { historico: Isbd[];
     );
   }
 
-  const series: Serie[] = [
-    { etiqueta: 'Procesos', valores: historico.map((h) => h.ip), guion: '5 4' },
-    { etiqueta: 'Memoria', valores: historico.map((h) => h.im), guion: '1 3' },
-    { etiqueta: 'Archivos', valores: historico.map((h) => h.ia), guion: '6 3 1 3' },
-    { etiqueta: 'ISBD', valores: historico.map((h) => h.puntuacion), principal: true },
-  ];
+  const valoresDe: Record<string, (number | null)[]> = {
+    ISBD: historico.map((h) => h.puntuacion),
+    Procesos: historico.map((h) => h.ip),
+    Memoria: historico.map((h) => h.im),
+    Archivos: historico.map((h) => h.ia),
+  };
+  // El ISBD se dibuja al final para que quede por encima de los componentes.
+  const series: Serie[] = [...TRAZOS]
+    .sort((a, b) => Number(a.principal) - Number(b.principal))
+    .map((t) => ({ etiqueta: t.etiqueta, valores: valoresDe[t.etiqueta], principal: t.principal, guion: t.guion }));
 
   const alturaGrafico = ALTO - MARGEN_INF;
   const anchoGrafico = ANCHO - MARGEN_IZQ - MARGEN_DER;

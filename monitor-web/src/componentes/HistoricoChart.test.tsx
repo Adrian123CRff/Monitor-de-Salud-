@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { HistoricoChart } from './HistoricoChart';
+import { HistoricoChart, MuestraDeTrazo, TRAZOS } from './HistoricoChart';
 import type { Alerta, Isbd } from '../api/tipos';
 
 function punto(puntuacion: number, minutos: number): Isbd {
@@ -116,5 +116,38 @@ describe('HistoricoChart', () => {
 
     const titulos = [...container.querySelectorAll('title')].map((t) => t.textContent);
     expect(titulos.some((t) => t?.includes('sigue abierta'))).toBe(true);
+  });
+});
+
+describe('MuestraDeTrazo -- la leyenda no puede contradecir al grafico', () => {
+  it('reproduce el trazo real de cada serie, no un cuadro de color', () => {
+    const { container } = render(
+      <>
+        {TRAZOS.map((t) => (
+          <MuestraDeTrazo key={t.etiqueta} etiqueta={t.etiqueta} />
+        ))}
+      </>,
+    );
+    const lineas = [...container.querySelectorAll('line')];
+
+    expect(lineas).toHaveLength(4);
+    // El ISBD es la unica con color; los componentes van en gris.
+    expect(lineas[0].getAttribute('stroke')).toBe('var(--s1)');
+    lineas.slice(1).forEach((l) => expect(l.getAttribute('stroke')).toBe('var(--muted)'));
+    // Y cada componente tiene un patron distinto: se distinguen sin color.
+    const patrones = lineas.slice(1).map((l) => l.getAttribute('stroke-dasharray'));
+    expect(new Set(patrones).size).toBe(3);
+  });
+
+  it('el patron de la leyenda es el MISMO que dibuja el grafico', () => {
+    const { container: leyenda } = render(<MuestraDeTrazo etiqueta="Archivos" />);
+    const { container: grafico } = render(<HistoricoChart historico={sana} />);
+
+    const enLeyenda = leyenda.querySelector('line')?.getAttribute('stroke-dasharray');
+    const enGrafico = [...grafico.querySelectorAll('polyline')]
+      .map((p) => p.getAttribute('stroke-dasharray'))
+      .filter(Boolean);
+
+    expect(enGrafico).toContain(enLeyenda);
   });
 });
